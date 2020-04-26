@@ -5,6 +5,21 @@ from PySide import QtCore, QtGui, QtUiTools
 backup = 0
 prod = False
 
+class ExportFileUi(QtWidgets.QMainWindow):
+    def __init__(self, parent=None):
+        super(ExportFileUi, self).__init__(parent)
+
+
+class ExportFile:
+    def __init__(self, export_path):
+        assert os.path.isdir(export_path)
+        self.export_path = export_path
+        print(self.export_path)
+        self.ui = ExportFileUi()
+        self.ui.show()
+
+
+
 class AccountManager(QtGui.QMainWindow):
     def __init__(self, scriptDirectory, uiFileName, parent=None):
         super(AccountManager, self).__init__(parent)

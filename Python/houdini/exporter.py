@@ -1,10 +1,10 @@
 import hou
 
-# TODO
-# reset connexion on creation, update connexions
-# read autoRange from files
-# open folder and render stats
-# comments
+# TODO Exporter
+#  reset connexion on creation, update connexions
+#  open folder and render stats
+#  comments
+#  read autoRange from files
 
 
 class Exporter:
@@ -86,8 +86,21 @@ class Exporter:
             pass
 
 
-    class ExportFile():
-        def __init__(self):
-            self.exportPath = None
-            self.fileNaming = None
-            self.commentFile = None
+"""
+# Open Folder Button script
+import os,platform,subprocess;path=os.path.dirname(hou.pwd().parm('sopoutput').eval(
+));os.startfile(path) if platform.system()=='Windows' else subprocess.check_call(['open', path])
+"""
+
+"""
+# Check Files Button script 
+import sys,os;sys.path.append("E:Scripts/Python/houdini");import exporter;reload(exporter);
+exporter.ExportFile(os.path.dirname(hou.pwd().parm('sopoutput').eval()))
+"""
+
+"""
+# call script from houdini ?
+cmd3 = 'python -c "import sys;sys.path.append(\\"E:/Scripts/Python/houdini\\");import exporter;exporter.launch()"'
+cmd3 = 'python -i -c "import sys;sys.path.append(\\"E:/Scripts/Python/houdini\\");import exporter;exporter.launch()"'
+subprocess.call(cmd3, shell=True)
+"""

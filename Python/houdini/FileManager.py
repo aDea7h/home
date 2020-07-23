@@ -3,7 +3,17 @@ import os
 from time import localtime, strftime
 import shutil
 
+"""
+ 
+ 
+ Old use ProjectManager instead
+ 
+ 
+ 
+"""
+
 # TODO
+# import delete_old_backups_ in ProjectManager module and delete this one :)
 # Use working day sessions while no publish system
 
 if __package__ is None:
@@ -13,6 +23,8 @@ if __package__ is None:
         sys.path.append(path)
 import File
 import tools
+import FileVersionning
+reload(FileVersionning)
 
 
 def delete_old_backups(nbr=10, rem=True):
@@ -76,3 +88,22 @@ def publish(publish_folder='_Publish'):
 
     shutil.copy2(full_path, publish_path)
     print('Published to : {}'.format(publish_path))
+
+
+def versionning():
+    hou.hipFile.save(None, False)
+    full_path = hou.hipFile.path()
+    name = hou.hipFile.basename()
+    path = full_path[:-len(name)]
+
+    attrs = {
+        'date_versionning': True,
+        'version': None,
+        'comment': None,
+    }
+
+    version = FileVersionning.Version(path, name, attrs)
+
+    attrs
+
+    version.do_publish()

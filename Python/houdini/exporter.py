@@ -1,11 +1,12 @@
 import hou
 
 # TODO Exporter
+#  add file_name to export
 #  reset connexion on creation, update connexions
 #  open folder and render stats
 #  comments
 #  read autoRange from files
-
+#  auto read single frame setup on sop exporter
 
 class Exporter:
     def __init__(self):

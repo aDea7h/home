@@ -1,7 +1,7 @@
 #import hou
 import os
-# from PySide2 import QtCore, QtGui, QtUiTools, QtWidgets
-from PySide import QtCore, QtGui, QtUiTools
+from PySide2 import QtCore, QtGui, QtUiTools
+# from PySide import QtCore, QtGui, QtUiTools
 import sys
 import math
 from datetime import datetime as datetime
@@ -25,7 +25,7 @@ from datetime import datetime as datetime
 # Correction of datetime bug on time diff
 # Todo how to display extra files (keep in recap)
 
-# TODO ExportFilUi
+# TODO ExportFileUi
 # set a tab ui to manage multi file sequence
 
 class Exporter:
@@ -107,78 +107,79 @@ class Exporter:
             pass
 
 
-class FileObj:
-    def __init__(self, path, name=None, cfg= {}):
-        extension_dic = {
-            '.sc': ('.bgeo.sc', 'cache'),
-            '.bgeo': ('.bgeo', 'cache'),
-            '.vdb': ('.vdb', 'cache'),
-            '.abc': ('.abc', 'cache'),
-            '.exr': ('.exr', 'image'),
-            '.jpg': ('.exr', 'image'),
-            '': ('', 'folder'),
-        }
-
-        self.cfg = {
-            'idx_separator': ".",
-            'idx_pos': -1,
-            'extension_dic': extension_dic,
-        }
-        self.cfg.update(cfg)
-
-        if name is None:
-            self.path = os.path.dirname(path)
-            self.name = os.path.basename(path)
-        else:
-            self.path = path
-            self.name = name
-        self.type = None
-        self.extension = None
-        self.exists = None
-
-        self.size = None
-        self.time = None
-        self.idx = None
-        self.is_valid = None
-
-        self.get_extension(self.cfg['extension_dic'])
-        self.check_existence()
-        if self.exists is True:
-            self.get_file_infos()
-
-        self.get_index(self.cfg['idx_separator'], self.cfg['idx_pos'])
-        self.check_validity()
-
-    def get_extension(self, extension_dic):
-        base_name, os_ext = os.path.splitext('{0}/{1}'.format(self.path, self.name))
-        if os_ext in extension_dic.keys():
-            self.extension = extension_dic[os_ext][0]
-            self.type = extension_dic[os_ext][1]
-        else:
-            self.extension = os_ext
-            self.type = "unknown"
-
-    def check_existence(self):
-        self.exists = os.path.exists(os.path.join(self.path, self.name))
-        if self.exists is False:  # Flag as invalid if folder doesn't exists
-            self.is_valid = os.path.exists(self.path)
-
-    def get_file_infos(self):
-        self.time = os.path.getmtime(os.path.join(self.path, self.name))
-        self.size = os.path.getsize(os.path.join(self.path, self.name))
-
-    def get_index(self, idx_separator, idx_pos):
-        base_name = self.name[:-len(self.extension)]
-        if idx_separator in base_name:
-            self.idx = int(base_name.split(idx_separator)[idx_pos])
-        else:
-            self.idx = False
-
-    def check_validity(self):
-        if self.is_valid is False:
-            return
-        # TODO Test weight
-        self.is_valid = True
+""" Use File Lib instead """
+# class FileObj:
+#     def __init__(self, path, name=None, cfg= {}):
+#         extension_dic = {
+#             '.sc': ('.bgeo.sc', 'cache'),
+#             '.bgeo': ('.bgeo', 'cache'),
+#             '.vdb': ('.vdb', 'cache'),
+#             '.abc': ('.abc', 'cache'),
+#             '.exr': ('.exr', 'image'),
+#             '.jpg': ('.exr', 'image'),
+#             '': ('', 'folder'),
+#         }
+#
+#         self.cfg = {
+#             'idx_separator': ".",
+#             'idx_pos': -1,
+#             'extension_dic': extension_dic,
+#         }
+#         self.cfg.update(cfg)
+#
+#         if name is None:
+#             self.path = os.path.dirname(path)
+#             self.name = os.path.basename(path)
+#         else:
+#             self.path = path
+#             self.name = name
+#         self.type = None
+#         self.extension = None
+#         self.exists = None
+#
+#         self.size = None
+#         self.time = None
+#         self.idx = None
+#         self.is_valid = None
+#
+#         self.get_extension(self.cfg['extension_dic'])
+#         self.check_existence()
+#         if self.exists is True:
+#             self.get_file_infos()
+#
+#         self.get_index(self.cfg['idx_separator'], self.cfg['idx_pos'])
+#         self.check_validity()
+#
+#     def get_extension(self, extension_dic):
+#         base_name, os_ext = os.path.splitext('{0}/{1}'.format(self.path, self.name))
+#         if os_ext in extension_dic.keys():
+#             self.extension = extension_dic[os_ext][0]
+#             self.type = extension_dic[os_ext][1]
+#         else:
+#             self.extension = os_ext
+#             self.type = "unknown"
+#
+#     def check_existence(self):
+#         self.exists = os.path.exists(os.path.join(self.path, self.name))
+#         if self.exists is False:  # Flag as invalid if folder doesn't exists
+#             self.is_valid = os.path.exists(self.path)
+#
+#     def get_file_infos(self):
+#         self.time = os.path.getmtime(os.path.join(self.path, self.name))
+#         self.size = os.path.getsize(os.path.join(self.path, self.name))
+#
+#     def get_index(self, idx_separator, idx_pos):
+#         base_name = self.name[:-len(self.extension)]
+#         if idx_separator in base_name:
+#             self.idx = int(base_name.split(idx_separator)[idx_pos])
+#         else:
+#             self.idx = False
+#
+#     def check_validity(self):
+#         if self.is_valid is False:
+#             return
+#         # TODO Test weight
+#         self.is_valid = True
 
 
 class FileUi(QtGui.QWidget):

@@ -1,7 +1,11 @@
 import os
 from pprint import pprint
 import tools
-reload(tools)
+import pathlib
+# reload(tools)
+
+# TODO Refaire avec pathlib ?
+
 
 def get_extension_dic():
     extension_dic = {
@@ -14,10 +18,54 @@ def get_extension_dic():
         '.hip': ('.hip', 'houdini'),
         '.hipnc': ('.hipnc', 'houdini'),
         '.hiplc': ('.hiplc', 'houdini'),
+        '.mp3': ('.mp3', 'audio'),
+        '.ogg': ('.ogg', 'audio'),
+        '.flac': ('.flac', 'audio'),
         '': ('', 'folder'),
     }
     return extension_dic
 
+
+class Ls:
+    def __init__(self, cmd=None, cmdFormat=None):
+        self.defaultCmd = os.listdir
+        self.default = True
+        if cmd is not None:
+            self.cmd = cmd
+            self.cmdFormat = cmdFormat
+            self.default = False
+
+    def ls(self, path):
+        if self.default is True:
+            return self.defaultCmd(path)
+        else:
+            out = self.cmd(self.cmdFormat.format(path))
+            if isinstance(out, str) is True:
+                out = out.strip().split()
+                result = []
+                ridx = -1
+                merge = False
+                for part in out:
+                    if part[-1:] == '\\':
+                        if merge is True:
+                            # print('suffix with merge', result, ridx, part[:-1] + ' ')
+                            result[ridx] += part[:-1] + ' '
+                        else:
+                            # print('suffix no merge', result, ridx, part[:-1] + ' ')
+                            result.append(part[:-1] + ' ')
+                            ridx += 1
+                        merge = True
+                    else:
+                        if merge is True:
+                            # print('no suffix merge', result, ridx, part[:-1] + ' ')
+                            result[ridx] += part
+                        else:
+                            # print('no suffix no merge', result, ridx, part[:-1] + ' ')
+                            result.append(part)
+                            ridx += 1
+                        merge = False
+                out = result
+            return out
 
 class FileObj:
     def __init__(self, path, name=None, cfg={}, attrs={}):
@@ -132,6 +180,35 @@ class Sequence(SeqFileObj):
 
         SeqFileObj.__init__(self, path, name, self.cfg, attrs)
 
+class BuildTreeFromFileList:
+    def __init__(self, fileList, cfg={}, verbose = 0):
+        self.fileList = fileList
+
+        self.cfg = {
+            'check_existence':False,
+        }
+        self.cfg.update(cfg)
+        self.verbose = verbose
+
+        self.fileTree = self.buildTree(self.fileList)
+
+    def fromListToDictTree(self, list, tree, obj):
+        for f in list:
+            if f not in tree.keys():
+                tree[f] = {self.fromListToDictTree(list.pop(0), {})}
+            else:
+                tree[f] = {self.fromListToDictTree(list.pop(0), {})}
+            if len(list)==0 :
+                tree[f]
+
+
+    def buildTree(self, fileList, tree):
+        tree = {}
+        for obj in fileList:
+            path = pathlib.PurePath(obj.path)
+            print(path)
+            tree = self.fromListToDictTree(path, tree, obj)
+
 
 class RecursiveWalk:
     # TODO
@@ -151,6 +228,8 @@ class RecursiveWalk:
             'max_recursion': 3,
             'filter_files': False,
             'filter_type': [],
+            'cmd': None,
+            'cmdFormat': None,
         }
         self.cfg.update(cfg)
 
@@ -163,10 +242,14 @@ class RecursiveWalk:
         if os.path.exists is False:
             raise Exception('Invalid path')
 
+        #needs cmd, cmdFormat
+        self.Ls = Ls(self.cfg['cmd'], self.cfg['cmdFormat'])
+
         self.file_tree = {}
         if self.cfg['limit_recursion'] is False:
             if self.cfg['file_tree_is_nested'] is True:  # returns flattened dict only ! no nested one
-                raise Exception('Nested dict without max recursion is not implemented yet!')
+                # raise Exception('Nested dict without max recursion is not implemented yet!')
+                self.list_recursive(self.path, self.file_tree, 0)
             for path, dirs, files in os.walk(path):
                 for file in files:
                     file_obj = FileObj(path, file, self.cfg, self.attrs)
@@ -179,10 +262,11 @@ class RecursiveWalk:
 
     def list_recursive(self, path, dic, recursion=0):  # return nested dict or flattened dict
         self.cprint('listing files in : {}'.format(path), 1)
-        files = os.listdir(path)
+        #files = os.listdir(path)
+        files = self.Ls.ls(path)
         for file_name in files:
             if os.path.isdir(os.path.join(path, file_name)) is True:
-                if recursion + 1 < self.cfg['max_recursion']:
+                if recursion + 1 < self.cfg['max_recursion'] or self.cfg['limit_recursion'] is False:
                     result = self.list_recursive(os.path.join(path, file_name), {}, recursion + 1)
                     if result != {} and self.cfg['file_tree_is_nested'] is True:
                         dic[file_name] = result

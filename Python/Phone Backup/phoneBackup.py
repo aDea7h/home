@@ -1,8 +1,14 @@
-"""TODO
+"""
+# REQUIREMENTS
+Install adb (r34.0.05-windows used)
+pip install ppadb
+
+# LOGS
 # v1.0 : 24.01.20
 # v1.1 :
 # v1.2 : 24.02.14
 photos actualisees sur oneplus
+
 # TODO :
 aGarder : supprimer en local fichiers suppr sur telephone (re copie pour l instant)
 signal video envoie vers autres video

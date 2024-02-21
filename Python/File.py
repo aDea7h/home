@@ -1,8 +1,6 @@
 import os
 from pprint import pprint
-import tools
 import pathlib
-# reload(tools)
 
 # TODO Refaire avec pathlib ?
 
@@ -237,7 +235,6 @@ class RecursiveWalk:
             'exists': True,
         }
         self.__dict__.update(attrs)
-        self.cprint = tools.CustomPrint(0, 0)
 
         if os.path.exists is False:
             raise Exception('Invalid path')

@@ -6,9 +6,9 @@ from time import strptime
 import File
 import FileVersionning
 import tools
-reload(FileVersionning)
-reload(File)
-reload(tools)
+# reload(FileVersionning)
+# reload(File)
+# reload(tools)
 
 # TODO hou.putenv doesnt set $JOB on console yes but not this tool WTF ??
 # TODO Set proj on untitled.hip ?
@@ -285,7 +285,7 @@ class ProjectManager(QtWidgets.QWidget):
                     self.cprint((scene_obj.name, type, scene_obj.path), 0)
                     if type is None:
                         scene_obj.parent_scene = scene_obj.name
-                    elif type is 'backup':
+                    elif type == 'backup':
                         scene_obj.parent_scene = get_backup_scene_name(scene_obj)
                     else:  # type is 'publish'
                         scene_obj.parent_scene = get_publish_scene_name(scene_obj)
@@ -295,7 +295,7 @@ class ProjectManager(QtWidgets.QWidget):
                     if type is None:
                         new_tree[scene_obj.parent_scene] = scene_obj
                     else:
-                        if type is 'backup':
+                        if type == 'backup':
                             if 'backup' not in new_tree[scene_obj.parent_scene]:
                                 new_tree[scene_obj.parent_scene]['backup'] = {}
                             new_tree[scene_obj.parent_scene]['backup'][scene_obj.name] = scene_obj

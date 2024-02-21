@@ -6,6 +6,7 @@ import Recette
 # TODO
 """
 recette in multicategory : pates pesto ds sauce et dans pates
+possibilite de non recette : clic droit poulet > blanc + clic droit feculent > pates
 
 """
 

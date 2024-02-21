@@ -3,6 +3,14 @@ from pprint import pprint as pprint
 import os
 import shutil
 
+def displayReadableByteSize(nbytes):
+    suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+    i = 0
+    while nbytes >= 1024 and i < len(suffixes)-1:
+        nbytes /= 1024.
+        i += 1
+    f = ('%.2f' % nbytes).rstrip('0').rstrip('.')
+    return '%s %s' % (f, suffixes[i])
 
 def customPrint(msg, verboseLevel=0, title=None, onlyTitle=False, verbose=0):
     if verbose >= verboseLevel:

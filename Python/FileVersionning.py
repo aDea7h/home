@@ -4,7 +4,7 @@ import shutil
 import json
 from stat import S_IREAD, S_IRGRP, S_IROTH, S_IWUSR
 import tools
-reload(tools)
+#reload(tools)
 
 # TODO
 # if cache publish sends to HDD

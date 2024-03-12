@@ -311,3 +311,103 @@ def matchItems(stringSearched, matchingPatternDic, splitChars="&&", exclChar="!=
                 if match == pattern and tag not in tags:
                     tags.append(tag)
     return(tags)
+
+import re
+from unidecode import unidecode
+
+class Search:
+    def __init__(self, flag="unidecode", verbose=0):
+        import re
+        self.flag = flag # ["unidecode", "ignoreCase", others = no flag]
+        if self.flag == "unidecode":
+            from unidecode import unidecode
+        self.partialMatch = True
+        self.partialExclude = False
+        self.lazyWildcard = ' '
+        self.exclusionChar = '!'
+        self.splitItems = ','
+        self.verbose  = verbose
+
+    def searchText(self, searchTxt, matchTxt):
+        if self.flag in ["unidecode", "ignoreCase"]:
+            result = re.search(searchTxt, matchTxt, flags=re.IGNORECASE)
+        else:
+            result = re.search(searchTxt, matchTxt)
+        customPrint([searchTxt, matchTxt, result], 1)
+        if result:
+            if self.partialMatch is False:
+                if result.end() - result.start() != len(searchTxt):
+                    return None
+            return True
+        return None
+
+    def searchTextInList(self, searchTxt, matchTxtList, exclusion=False):
+        #search text in list of text, a single exclusion match cancels everything
+        if self.flag == "unidecode":
+            searchTxt = unidecode(searchTxt)
+        match = None
+        for matchTxt in matchTxtList:
+            result = self.searchText(searchTxt, matchTxt)
+            if result is True:
+                if exclusion is True:
+                    return False
+                else:
+                    match = True
+        return match
+
+    def searchTextPartsInItemMatchList(self, searchTextParts, matchItem):
+        #search a whole item split in parts against item with multiple matching name (name list)
+        if isinstance(matchItem, str):
+            matchItem = [matchItem]
+        match = False
+        for textPart, exclusion in searchTextParts:
+            result = self.searchTextInList(textPart, matchItem)
+            if result is True:
+                if exclusion is True:
+                    return False
+                else:
+                    match = True
+        return match
+
+    def splitSearchItemToParts(self, searchItem):
+        itemParts = searchItem.split(self.lazyWildcard)
+        idx = 0
+        for item in itemParts:
+            item = item.strip()
+            exclusion = False
+            if item.startswith(self.exclusionChar):
+                item = item[1:]
+                exclusion = True
+            itemParts[idx] = (item, exclusion)
+            idx += 1
+        return itemParts
+
+    def splitWholeSearchToItemParts(self, wholeSearch):
+        if isinstance(wholeSearch, str):
+            searchedItems = [x.strip() for x in wholeSearch.split(self.splitItems)]
+        else:
+            searchedItems = wholeSearch
+        searchedItems = [self.splitSearchItemToParts(item) for item in searchedItems]
+        return searchedItems
+
+    def matchEachItemToWholeSearch(self, itemMatchList, wholeSearch, itemMatchIsObject=False, itemMatchAttribute='match_name'):
+        searchedItems = self.splitWholeSearchToItemParts(wholeSearch)
+        print(searchedItems)
+        resultList = []
+        for itemMatch in itemMatchList:
+            match = False
+            for searchedItem in searchedItems:
+                if itemMatchIsObject is False:
+                    result = self.searchTextPartsInItemMatchList(searchedItem, itemMatch)
+                else:
+                    matchAttribute = getattr(itemMatch, itemMatchAttribute)
+                    result = self.searchTextPartsInItemMatchList(searchedItem, matchAttribute)
+                if result is True:
+                    match = True
+                    print("found", itemMatch.name)
+                    break
+            resultList.append((itemMatch, match))
+        return resultList
+
+
+

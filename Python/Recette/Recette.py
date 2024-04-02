@@ -10,12 +10,15 @@ score climat
 recettes a tester
 proposer vieilles recettes de ts les jours
 """
+import os.path
+
 import pandas
 import odf
 import time
 import numpy as np
 from unidecode import unidecode
 import tools
+import sqlite3
 
 def removeNans(dict):
     def removeNan(val):
@@ -151,6 +154,7 @@ class Recipe:
         if checkIngredient is True:
             self.conformRecipeIngredients(ingredientList)
         self.detectMatchNames()
+        self.isVegan = isVegan(self)
 
     def printObj(self):
         print('-->> {}'.format(self.name))
@@ -160,6 +164,8 @@ class Recipe:
         idx = 0
         if self.ingredients in [None, []]:
             print("No ingredients found for : {}".format(self.name))
+            self.ingredients = []
+            self.error = True
             return
         for recipeIngredient in self.ingredients:
             name = unidecode(recipeIngredient).strip()
@@ -175,6 +181,7 @@ class Recipe:
                 self.ingredients[idx] = recipeIngredient
             else:
                 print('--> Ingredient not Found : '+recipeIngredient)
+                self.ingredients[idx] = Ingredient({'name': recipeIngredient, 'special': True})
                 self.error = True
             idx += 1
 
@@ -241,8 +248,23 @@ class RecipeList:
         if isinstance(filterText, str):
             filterText = filterText.strip()
         matchList = self.Search.matchEachItemToWholeSearch(items, filterText, True, attr)
-        print([(obj.name, match) for obj, match in matchList])
+        # print([(obj.name, match) for obj, match in matchList])
         return matchList
+
+    def filterRecipeIngredients(self, ingredientList, recipeList):
+        filterList = []
+        for recipeObj in recipeList:
+            recipeIngredientList = [x.name for x in recipeObj.ingredients]
+            matchList = self.Search.matchEachItemToWholeSearch(ingredientList, recipeIngredientList, True, 'match_name')
+            recipeMatch = False
+            for ingredient, match in matchList:
+                if match is True:
+                    recipeMatch = True
+                    print('found recipe', recipeObj.name, ingredient.name, recipeIngredientList, ingredient.match_name)
+                    break
+            filterList.append((recipeObj, recipeMatch))
+        print([(obj.name, recipeMatch) for obj, recipeMatch in filterList])
+        return filterList
 
 
 
@@ -282,6 +304,30 @@ class GoalList:
             self.goalList.append(goalObj)
 
 
+class Notes:
+    def __init__(self, path='E:/Scripts/Python/Recette/notes.txt'):
+        self.path = path
+
+    def read(self):
+        if os.path.exists(self.path) is False:
+            print("TODO file not found") #TODO
+            return ''
+
+        fileObj = open(self.path, 'r')
+        content = fileObj.read()
+        fileObj.close()
+        return content
+
+    def save(self, content):
+        if os.path.exists(self.path) is False:
+            if os.path.exists(os.path.split(self.path)[0]) is False:
+                print("Folder not found, unable to save notes") #TODO
+                return
+
+        fileObj = open(self.path, 'w')
+        fileObj.write(content)
+        fileObj.close()
+
 
 class Day:
     def __init__(self, name, code):
@@ -306,6 +352,14 @@ class DayList:
             dayObj = Day(dayName, dayNum)
             self.dayList.append(dayObj)
 
+
+def isVegan(obj):
+    vegan = True
+    for ingredient in obj.ingredients:
+        if ingredient.vegan is False:
+            vegan = False
+            break
+    return vegan
 
 if __name__ == "__main__":
     RecipeList()

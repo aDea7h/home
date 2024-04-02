@@ -1,41 +1,95 @@
+import unidecode
 from PySide6 import QtCore, QtGui, QtWidgets
 import sys
 import Recette
+import os
+import ctypes
 #import tools
 
 # TODO
 """
-sauvegarde / import / envoyer mail recap
+bug : bobun sort dans ingredient canelle
+bug : filter de recette
+sauvegarde / import / envoyer mail recap / hitorique
 direct edit menu by keyboard
 ingredient list management (checkbox / remove on keyboard replace)
 menu manual edit ingredient / recette and export / set ingredient-recipe as leftover
-inverser right/left pane
-menu item edit = txt insert in filter recipe and ingredient
-case goal check
-zone texte libre pour notes a cote des goals
-ds vu ingredient proposer de congeler
-zone a finir (farine sarasin  congel)
-rappel conserves et congel
+    menu item edit = txt insert in filter recipe and ingredient
+    case goal check
+    zone texte libre pour notes a cote des goals
+    idees de recette /ingredient a finir pour plus tard
+    liste des courses a split (speciaux / viande / legume / divers / toujours dispo)
+    dark ui
+ds vu liste des courses/menus proposer de congeler (avoir jour des courses)
 jour a contrainte de temps (sport/douche....)
-idees de recette /ingredient a finir pour plus tard
-menu icomplet / complet
-filter de recette
+selection ingredient selectionne le/les repas du menu
+    menu icomplet / complet
+remove ingredient checkbox ?
+
+
 ouverture rapide et progress bar
-dark ui and colors and beautiful calendar
-ajouter des repas
+colors and beautiful calendar
+    ajouter des repas dans les menus
 ajouter des ingredients / recettes et editer l'ods
-liste des courses a split (speciaux / viande / legume / divers / toujours dispo)
+
 ajout de menus generic sans ingredients a flagger : "gateau" = pas d'ingredient listable
 recette avec variantes (utilisation de listes imbriquees [[liste pr variante 1], [liste var2]])
 links d'accompagnement et menu tout fait
 !! conform des ingredients de recette sur liste d ingredient a refaire  (on sait pas sur quoi ca match et peu precis)!!
 gestion des poids d ingredients et repartition sur multi ingredients (poid des aliments total et pourcentage par classe)
 """
+class StyledItemDelegate(QtWidgets.QStyledItemDelegate):
+    def sizeHint(self, option, index):
+        s = super(StyledItemDelegate, self).sizeHint(option, index)
+        if index.parent().isValid():
+            s.setHeight(40)
+        else:
+            s.setHeight(80)
+        return s
+
+    def setStyleSheet(self, styleSheet):
+        if styleSheet:
+            self.setStyleSheet(styleSheet)
+    #call with:
+    # delegate = StyledItemDelegate(self.treewidget)
+    # treewidget.setItemDelegate(delegate)
+    #treewidget.setstylesheet
+
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, libPath='E:/Scripts/Python/Recette/recette liste.ods', *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.libPath = libPath
+        self.uiTheme = {
+            'menuIsOk_bg': (0.1, 0.3, 0.1, 1),
+            'error_bg': (0.3, 0.1, 0.1, 1),
+            'viande_bg': (0.35, 0.16, 0.16, 1),
+            'légume_bg': (0.18, 0.35, 0.16, 1),
+            'féculent_bg': (0.5, 0.45, 0.21, 1),
+            'divers_bg': (0.16, 0.24, 0.35, 1),
+        }
+        self.icons = {
+            'iconPath': '{}/{}'.format(os.path.split(self.libPath)[0], 'icons'),
+            'add': 'add.png',
+            'clear': 'clear.png',
+            'dayBefore': 'dayBefore.png',
+            'fast': 'fast.png',
+            'feculent': 'feculent.png',
+            'viande': 'viande.png',
+            'search': 'search.png',
+            'slow': 'slow.png',
+            'time': 'time.png',
+            'vegan': 'vegan.png',
+            'legume': 'legume.png',
+            'replace': 'replace.png',
+            'menu': 'menu.png',
+            'ok': 'ok.png',
+            'warning': 'warning.png',
+            'edit': 'edit.png',
+        }
+        self.setQtUiTheme()
+        self.setWindowIcon(self.icons['menu'])
+
         self.layout = QtWidgets.QVBoxLayout()
         self.setLayout(self.layout)
         self.setWindowTitle("Recettes")
@@ -64,12 +118,71 @@ class MainWindow(QtWidgets.QMainWindow):
         self.rightPaneWidget.setLayout(self.rightPaneLayout)
         self.centralLayout.addWidget(self.rightPaneWidget, 1, 1)
         #
-        #LEFT PANE
+        #LEFTT PANE
         #
-        #INGREDIENT
+        #Goals
+        self.qtGoalsAndNotesWidget = QtWidgets.QWidget()
+        self.qtGoalsAndNotesWidgetLayout = QtWidgets.QGridLayout()
+        self.qtGoalsAndNotesWidget.setLayout(self.qtGoalsAndNotesWidgetLayout)
+        self.leftPaneLayout.addWidget(self.qtGoalsAndNotesWidget)
+        self.qtGoalsAndNotesWidget.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Maximum)
+
+        self.qtGoalsTreeWidget = QtWidgets.QTreeWidget()
+        self.qtGoalsTreeWidget.setColumnCount(3)
+        self.qtGoalsTreeWidget.setHeaderItem(QtWidgets.QTreeWidgetItem(["Nbr", "Objectif par semaine", "Note"]))
+        self.qtGoalsAndNotesWidgetLayout.addWidget(self.qtGoalsTreeWidget, 0, 0, 2, 1)
+
+        #Notes
+        self.qtNotesTextEdit = QtWidgets.QTextEdit()
+        self.qtNotesTextEdit.setPlaceholderText('Take notes here')
+        self.qtNotesTextEdit.setAutoFormatting(QtWidgets.QTextEdit.AutoFormattingFlag.AutoAll)
+        self.qtSaveNotesButton = QtWidgets.QPushButton('Save Notes')
+        self.qtGoalsAndNotesWidgetLayout.addWidget(self.qtNotesTextEdit, 0, 1)
+        self.qtGoalsAndNotesWidgetLayout.addWidget(self.qtSaveNotesButton, 1, 1)
+
+
+        #Menus
+        self.qtLabelMenu = QtWidgets.QLabel('Menus :')
+        self.qtMenuOperations = QtWidgets.QWidget()
+        self.qtMenuOperationsLayout = QtWidgets.QGridLayout()
+        self.qtMenuOperations.setLayout(self.qtMenuOperationsLayout)
+        self.qtMenuButtonUp = QtWidgets.QPushButton('Up')
+        self.qtMenuButtonDown = QtWidgets.QPushButton('Down')
+        self.qtMenuOperationsLayout.addWidget(self.qtMenuButtonUp, 0, 0)
+        self.qtMenuOperationsLayout.addWidget(self.qtMenuButtonDown, 0, 1)
+        self.qtTreeMenu = QtWidgets.QTreeWidget()
+        self.qtTreeMenu.setColumnCount(3)
+        self.qtTreeMenu.setHeaderItem(QtWidgets.QTreeWidgetItem(["Jour", "Menu", "Notes"]))
+        self.qtTreeMenu.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.qtTreeMenu.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        self.leftPaneLayout.addWidget(self.qtLabelMenu)
+        self.leftPaneLayout.addWidget(self.qtTreeMenu)
+        self.leftPaneLayout.addWidget(self.qtMenuOperations)
+
+
+        #Groceries
+        self.qtLabelGroceriesList = QtWidgets.QLabel('Liste des Courses')
+        self.qtGroceriesTree = QtWidgets.QTreeWidget()
+        self.qtGroceriesTree.setHeaderItem(QtWidgets.QTreeWidgetItem(['Ingredients :']))
+        qtSpecialItem = QtWidgets.QTreeWidgetItem(['Non Commun'])
+        qtSpecialItem.setIcon(0, self.icons['warning'])
+        qtViandeItem = QtWidgets.QTreeWidgetItem(['Viande'])
+        qtViandeItem.setIcon(0, self.icons['viande'])
+        qtLegumeItem = QtWidgets.QTreeWidgetItem(['Légumes'])
+        qtLegumeItem.setIcon(0, self.icons['legume'])
+        qtAlwaysAvailableItem = QtWidgets.QTreeWidgetItem(['Toujours Disponible - A Verifier'])
+        qtAlwaysAvailableItem.setIcon(0, self.icons['ok'])
+        topLevel = [qtSpecialItem, qtViandeItem, qtLegumeItem, QtWidgets.QTreeWidgetItem(['Divers']), qtAlwaysAvailableItem]
+        self.qtGroceriesTree.addTopLevelItems(topLevel)
+        self.qtGroceriesTree.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
+        self.leftPaneLayout.addWidget(self.qtGroceriesTree)
+        #
+        # RIGHT PANE
+        #
+        # INGREDIENT
         #
         self.qtLabelIngredient = QtWidgets.QLabel("Ingredients")
-        self.leftPaneLayout.addWidget(self.qtLabelIngredient)
+        self.rightPaneLayout.addWidget(self.qtLabelIngredient)
         self.qtIngredientColumn = QtWidgets.QWidget()
         self.qtIngredientColumnLayout = QtWidgets.QHBoxLayout()
         self.qtIngredientColumn.setLayout(self.qtIngredientColumnLayout)
@@ -77,8 +190,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.qtIngredientActionWidgetLayout = QtWidgets.QVBoxLayout()
         # left buttons
         self.qtIngredientFilter = QtWidgets.QLineEdit()
+        self.qtIngredientFilter.setClearButtonEnabled(True)
+        self.qtIngredientFilter.addAction(self.icons['search'], QtWidgets.QLineEdit.ActionPosition.LeadingPosition)
         self.qtIngredientFilter.setPlaceholderText("Filter Ingredients")
-        self.leftPaneLayout.addWidget(self.qtIngredientFilter)
+        self.rightPaneLayout.addWidget(self.qtIngredientFilter)
         self.qtIngredientActionWidget.setLayout(self.qtIngredientActionWidgetLayout)
         self.qtIngredientAllLabel = QtWidgets.QLabel("Check")
         self.qtIngredientCheckAllButton = QtWidgets.QPushButton("All")
@@ -98,15 +213,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientSelInvertButton)
         # ingredients columns
         self.qtViandesColumnTree = QtWidgets.QTreeWidget()
-        self.qtViandesColumnTree.setHeaderItem(QtWidgets.QTreeWidgetItem(['Viande']))
+        viandeqtitem = QtWidgets.QTreeWidgetItem(['Viande'])
+        viandeqtitem.setIcon(0, self.icons['viande'])
+        self.qtViandesColumnTree.setHeaderItem(viandeqtitem)
         self.qtViandesColumnTree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.qtViandesColumnTree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode(3))
         self.qtLegumesColumnTree = QtWidgets.QTreeWidget()
-        self.qtLegumesColumnTree.setHeaderItem(QtWidgets.QTreeWidgetItem(['Légumes']))
+        legumeqtitem = QtWidgets.QTreeWidgetItem(['Légumes'])
+        legumeqtitem.setIcon(0, self.icons['legume'])
+        self.qtLegumesColumnTree.setHeaderItem(legumeqtitem)
         self.qtLegumesColumnTree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.qtLegumesColumnTree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode(3))
         self.qtFeculentsColumnTree = QtWidgets.QTreeWidget()
-        self.qtFeculentsColumnTree.setHeaderItem(QtWidgets.QTreeWidgetItem(['Féculents']))
+        feculentqtitem = QtWidgets.QTreeWidgetItem(['Féculents'])
+        feculentqtitem.setIcon(0, self.icons['feculent'])
+        self.qtFeculentsColumnTree.setHeaderItem(feculentqtitem)
         self.qtFeculentsColumnTree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.qtFeculentsColumnTree.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode(3))
         self.qtDiversColumnTree = QtWidgets.QTreeWidget()
@@ -118,19 +239,27 @@ class MainWindow(QtWidgets.QMainWindow):
         self.qtIngredientColumnLayout.addWidget(self.qtLegumesColumnTree)
         self.qtIngredientColumnLayout.addWidget(self.qtFeculentsColumnTree)
         self.qtIngredientColumnLayout.addWidget(self.qtDiversColumnTree)
-        self.leftPaneLayout.addWidget(self.qtIngredientColumn)
+        self.rightPaneLayout.addWidget(self.qtIngredientColumn)
         self.ingredientWidgetList = [('viande', self.qtViandesColumnTree), ('légume', self.qtLegumesColumnTree),
-                      ('féculent', self.qtFeculentsColumnTree), ('divers', self.qtDiversColumnTree)]
+                                     ('féculent', self.qtFeculentsColumnTree), ('divers', self.qtDiversColumnTree)]
         #
-        #RECIPE
+        # RECIPE
         #
+        # qtLabelRecipesIcon = QtWidgets.QWidget()
+        # qtLabelRecipesIcon.setI
+
         self.qtLabelRecipes = QtWidgets.QLabel('Recettes')
         self.qtRecipeFilter = QtWidgets.QLineEdit()
+        self.qtRecipeFilter.setClearButtonEnabled(True)
+        self.qtRecipeFilter.addAction(self.icons['search'], QtWidgets.QLineEdit.ActionPosition.LeadingPosition)
         self.qtRecipeFilter.setPlaceholderText("Filter Recipe")
+        self.qtFilterByIngredientCheckBox = QtWidgets.QCheckBox("Filter Recipe by Ingredients")
+        self.qtFilterByIngredientCheckBox.setCheckState(QtCore.Qt.CheckState.Checked)
         self.qtFilterByIngredientCombo = QtWidgets.QComboBox()
-        self.qtFilterByIngredientCombo.addItems(['Checked Ingredients', 'Ignore Ingredient Filter', 'Selected Ingredients', 'Visible Ingredients'])
+        self.qtFilterByIngredientCombo.addItems(
+            ['Selected Ingredients', 'Visible Ingredients', 'Checked Ingredients'])
 
-        #Recipe Tabs
+        # Recipe Tabs
         self.qtgroupBox = QtWidgets.QTabWidget()
         self.qtToutesGroupPage = QtWidgets.QWidget()
         self.qtEntreeGroupPage = QtWidgets.QWidget()
@@ -152,94 +281,59 @@ class MainWindow(QtWidgets.QMainWindow):
         self.qtPlatGroupPage.setLayout(self.qtPlatGroupPageLayout)
         self.qtDessertGroupPage.setLayout(self.qtDessertGroupPageLayout)
         self.qtSauceGroupPage.setLayout(self.qtSauceGroupPageLayout)
-        #Recipe content
+        # Recipe content
         self.qtTreeRecipe = QtWidgets.QTreeWidget()
         self.qtTreeRecipe.setColumnCount(1)
         self.qtTreeRecipe.setHeaderHidden(True)
         self.qtTreeRecipe.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.leftPaneLayout.addWidget(self.qtLabelRecipes)
-        self.leftPaneLayout.addWidget(self.qtRecipeFilter)
-        self.leftPaneLayout.addWidget(self.qtFilterByIngredientCombo)
-        self.leftPaneLayout.addWidget(self.qtgroupBox)
+        # self.rightPaneLayout.addWidget(qtLabelRecipesIcon)
+        self.rightPaneLayout.addWidget(self.qtLabelRecipes)
+        self.rightPaneLayout.addWidget(self.qtRecipeFilter)
+        self.rightPaneLayout.addWidget(self.qtFilterByIngredientCheckBox)
+        self.rightPaneLayout.addWidget(self.qtFilterByIngredientCombo)
+        self.rightPaneLayout.addWidget(self.qtgroupBox)
         self.qtToutesGroupPageLayout.addWidget(self.qtTreeRecipe)
         #
-        #RIGHT PANE
         #
-        self.qtGoalsTreeWidget = QtWidgets.QTreeWidget()
-        self.qtGoalsTreeWidget.setColumnCount(3)
-        self.qtGoalsTreeWidget.setHeaderItem(QtWidgets.QTreeWidgetItem(["Nbr", "Objectif par semaine", "Note"]))
-        self.qtGoalsTreeWidget.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Maximum)
-        self.rightPaneLayout.addWidget(self.qtGoalsTreeWidget)
-
-        #Menus
-        self.qtLabelMenu = QtWidgets.QLabel('Menus :')
-        self.qtMenuOperations = QtWidgets.QWidget()
-        self.qtMenuOperationsLayout = QtWidgets.QGridLayout()
-        self.qtMenuOperations.setLayout(self.qtMenuOperationsLayout)
-        self.qtMenuButtonUp = QtWidgets.QPushButton('Up')
-        self.qtMenuButtonDown = QtWidgets.QPushButton('Down')
-        self.qtMenuOperationsLayout.addWidget(self.qtMenuButtonUp, 0, 0)
-        self.qtMenuOperationsLayout.addWidget(self.qtMenuButtonDown, 0, 1)
-        self.qtTreeMenu = QtWidgets.QTreeWidget()
-        self.qtTreeMenu.setColumnCount(3)
-        self.qtTreeMenu.setHeaderItem(QtWidgets.QTreeWidgetItem(["Jour", "Menu", "Nbr"]))
-        self.qtTreeMenu.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.qtTreeMenu.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
-        self.rightPaneLayout.addWidget(self.qtLabelMenu)
-        self.rightPaneLayout.addWidget(self.qtTreeMenu)
-        self.rightPaneLayout.addWidget(self.qtMenuOperations)
-
-
-        #Groceries
-        # self.qtGroceriesWidget = QtWidgets.QWidget()
-        # self.qtGroceriesWidget.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding) #"was Expanding / Prefered"
-        # self.qtGroceriesWidgetLayout = QtWidgets.QGridLayout()
-        # self.qtGroceriesWidget.setLayout(self.qtGroceriesWidgetLayout)
-        self.qtLabelGroceriesList = QtWidgets.QLabel('Liste des Courses')
-        self.qtGroceriesTree = QtWidgets.QTreeWidget()
-        self.qtGroceriesTree.setHeaderItem(QtWidgets.QTreeWidgetItem(['Ingredients :']))
-        topLevel = [QtWidgets.QTreeWidgetItem(['Non Commun']), QtWidgets.QTreeWidgetItem(['Viande']), QtWidgets.QTreeWidgetItem(['Légumes']), QtWidgets.QTreeWidgetItem(['Divers']), QtWidgets.QTreeWidgetItem(['Toujours Disponible'])]
-        self.qtGroceriesTree.addTopLevelItems(topLevel)
-        self.qtGroceriesTree.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
-        self.rightPaneLayout.addWidget(self.qtGroceriesTree)
-
-        # self.qtGroceriesSpecialList = QtWidgets.QListWidget()
-        # self.qtGroceriesAlwaysAvailableList = QtWidgets.QListWidget()
-        # # self.qtGroceriesList = QtWidgets.QListWidget()
-        # # self.qtGroceriesList.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
-        # self.qtGroceriesViandeList = QtWidgets.QListWidget()
-        # self.qtGroceriesLegumeList = QtWidgets.QListWidget()
-        # self.qtGroceriesDiversList = QtWidgets.QListWidget()
-        #
-        # self.qtGroceriesWidgetLayout.addWidget(self.qtGroceriesSpecialList, 0, 0, 1, 3)
-        # self.qtGroceriesWidgetLayout.addWidget(self.qtGroceriesViandeList, 1, 0)
-        # self.qtGroceriesWidgetLayout.addWidget(self.qtGroceriesLegumeList, 1, 1)
-        # self.qtGroceriesWidgetLayout.addWidget(self.qtGroceriesDiversList, 1, 2)
-        # self.qtGroceriesWidgetLayout.addWidget(self.qtGroceriesAlwaysAvailableList, 2, 0, 1, 3)
-        # self.rightPaneLayout.addWidget(self.qtLabelGroceriesList)
-        # self.rightPaneLayout.addWidget(self.qtGroceriesList)
-        # self.rightPaneLayout.addWidget(self.qtGroceriesWidget)
+        #ADD DATA TO UI
         #
         #
-        #SET CONNECTIONS AND ADD DATA TO UI
-        #
-        #
-        self.setConnections()
         self.ingredientsDb = None
         self.setIngredients()
         self.recipeDb = None
         self.setRecipe()
         self.setGoals()
+        self.readNotes()
         self.initMenus()
         self.menuChanged() #init liste des courses
+        #
+        #
+        #SET CONNECTIONS
+        #
+        #
+        self.setConnections()
+
+    def setQtUiTheme(self):
+        for key in self.uiTheme:
+            r, g, b, a = self.uiTheme[key]
+            self.uiTheme[key] = QtGui.QColor.fromRgbF(r, g, b, a)
+
+        for key in self.icons:
+            if key == 'iconPath':
+                continue
+            self.icons[key] = QtGui.QIcon('{}/{}'.format(self.icons['iconPath'], self.icons[key]))
+
 
     def setIngredients(self):
-        def createQtItem(ingredientObj, parent=None):
+        def createQtItem(ingredientObj, parent=None, color=None):
             qtItem = QtWidgets.QTreeWidgetItem(parent, [ingredientObj.name])
             qtItem.setCheckState(0, QtCore.Qt.CheckState.Checked)
             qtItem.setData(0, QtCore.Qt.ItemDataRole.UserRole, ingredientObj)
+            qtItem.setFlags(qtItem.flags() | QtCore.Qt.ItemFlag.ItemIsAutoTristate)
             ingredientObj.qtItem.append(qtItem)
             self.ingredientsDb.ingredientDic[ingredientObj.name] = ingredientObj
+            if color:
+                qtItem.setBackground(0, color)
             return qtItem, ingredientObj
 
         self.ingredientsDb = Recette.IngredientList(self.libPath)
@@ -262,12 +356,13 @@ class MainWindow(QtWidgets.QMainWindow):
             categoryList = [None] if ingredientObj.category is None else ingredientObj.category
             for family in ingredientObj.family:
                 # print('New Ingredient : ', ingredientObj.name, ingredientObj.family, categoryList)
+                color = self.uiTheme['{}_bg'.format(family)]
                 for category in categoryList:
                     if category is not None:
                         parent = self.qtIngredientDic[family][category][0]
-                        qtItem, ingredientObj = createQtItem(ingredientObj, parent)
+                        qtItem, ingredientObj = createQtItem(ingredientObj, parent, color)
                     else:
-                        qtItem, ingredientObj = createQtItem(ingredientObj, None)
+                        qtItem, ingredientObj = createQtItem(ingredientObj, None, color)
                         topLevelItems[family].append(qtItem)
                     if ingredientObj.name in self.qtIngredientDic[family]:
                         self.qtIngredientDic[family][ingredientObj.name].append(qtItem)
@@ -320,6 +415,7 @@ class MainWindow(QtWidgets.QMainWindow):
         qtItemList = []
         for goalObj in self.goalDb.goalList:
             qtItem = QtWidgets.QTreeWidgetItem([str(goalObj.nbr), goalObj.name, goalObj.note])
+            qtItem.setCheckState(1, QtCore.Qt.CheckState.Unchecked)
             print(goalObj.name, goalObj.nbr, goalObj.note)
             goalObj.qtItem = qtItem
             qtItemList.append(qtItem)
@@ -327,28 +423,50 @@ class MainWindow(QtWidgets.QMainWindow):
         self.qtGoalsTreeWidget.expandAll()
         self.qtGoalsTreeWidget.sortItems(1, QtCore.Qt.SortOrder.AscendingOrder)
 
-    def initMenus(self):
-        def createQtItem(parent, label):
-            qtItem = QtWidgets.QTreeWidgetItem(parent, label)
-            qtItem.setData(1, QtCore.Qt.ItemDataRole.UserRole, [])
-            qtItem.setFlags(qtItem.flags() | QtCore.Qt.ItemFlag.ItemIsEditable)
-            return qtItem
+    def readNotes(self):
+        # print('reading notes')
+        notes = Recette.Notes(os.path.split(self.libPath)[0] + '/notes.html')
+        content = notes.read()
+        self.qtNotesTextEdit.setHtml(content)
 
+    def saveNotes(self):
+        # print('todo save notes')
+        content = self.qtNotesTextEdit.toHtml()
+        notes = Recette.Notes(os.path.split(self.libPath)[0]+'/notes.html')
+        notes.save(content)
+
+    def createMenuQtItem(self, parent, label):
+        qtItem = QtWidgets.QTreeWidgetItem(parent, label)
+        qtItem.setData(1, QtCore.Qt.ItemDataRole.UserRole, [])
+        qtItem.setFlags(qtItem.flags() | QtCore.Qt.ItemFlag.ItemIsEditable)
+        qtItem.setCheckState(2, QtCore.Qt.CheckState.Unchecked)
+        return qtItem
+
+    def initMenus(self):
         self.dayDb = Recette.DayList()
         qtDaysList = []
         for dayObj in self.dayDb.dayList:
             qtDay = QtWidgets.QTreeWidgetItem([dayObj.name, "", ""])
             qtDaysList.append(qtDay)
 
-            qtItem = createQtItem(qtDay, ['Midi', '', ''])
+            qtItem = self.createMenuQtItem(qtDay, ['Midi', '', ''])
             dayObj.qtItems.append(qtItem)
-            qtItem = createQtItem(qtDay, ['Soir', '', ''])
+            qtItem = self.createMenuQtItem(qtDay, ['Soir', '', ''])
             dayObj.qtItems.append(qtItem)
         self.qtTreeMenu.addTopLevelItems(qtDaysList)
         self.qtTreeMenu.expandAll()
 
     def setConnections(self):
-        # self.qtAddToMenuButton.clicked.connect(self.addRecipeToMenu)
+        #Left Pane
+        self.qtSaveNotesButton.clicked.connect(self.saveNotes)
+
+        self.qtTreeMenu.itemChanged.connect(self.menuTextChanged)
+        self.qtTreeMenu.itemEntered.connect(self.menuTextChanged)
+
+        self.qtMenuButtonUp.clicked.connect(lambda: self.moveItemMenu(True))
+        self.qtMenuButtonDown.clicked.connect(lambda: self.moveItemMenu(False))
+
+        #Right Pane
         self.qtIngredientFilter.textChanged.connect(self.filterIngredientList)
         self.qtIngredientCheckAllButton.clicked.connect(lambda: self.checkIngredient('All', 'All', True))
         self.qtIngredientCheckNoneButton.clicked.connect(lambda: self.checkIngredient('All', 'All', False))
@@ -356,14 +474,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.qtIngredientSelAllButton.clicked.connect(lambda: self.selIngredient('All', True))
         self.qtIngredientSelNoneButton.clicked.connect(lambda: self.selIngredient('All', False))
         self.qtIngredientSelInvertButton.clicked.connect(lambda: self.selIngredient('All', -1))
+
+        self.qtViandesColumnTree.selectionModel().selectionChanged.connect(self.ingredientTreeSelectionChanged)
+        self.qtViandesColumnTree.itemChanged.connect(self.ingredientTreeCheckChanged)
+        self.qtLegumesColumnTree.selectionModel().selectionChanged.connect(self.ingredientTreeSelectionChanged)
+        self.qtLegumesColumnTree.itemChanged.connect(self.ingredientTreeCheckChanged)
+        self.qtFeculentsColumnTree.selectionModel().selectionChanged.connect(self.ingredientTreeSelectionChanged)
+        self.qtFeculentsColumnTree.itemChanged.connect(self.ingredientTreeCheckChanged)
+        self.qtDiversColumnTree.selectionModel().selectionChanged.connect(self.ingredientTreeSelectionChanged)
+        self.qtDiversColumnTree.itemChanged.connect(self.ingredientTreeCheckChanged)
+
+        self.qtFilterByIngredientCheckBox.stateChanged.connect(self.filterRecipe)
+        self.qtFilterByIngredientCombo.currentIndexChanged.connect(self.filterRecipe)
         self.qtgroupBox.currentChanged.connect(self.changeTab)
         self.qtRecipeFilter.textChanged.connect(self.filterRecipe)
-        # self.qtButtonOther.clicked.connect(lambda: self.addSpecialToMenu(' - Autre'))
-        # self.qtButtonRestes.clicked.connect(lambda: self.addSpecialToMenu(' - Restes'))
-        # self.qtButtonRestaurant.clicked.connect(lambda: self.addSpecialToMenu(' - Restaurant'))
-        self.qtMenuButtonUp.clicked.connect(lambda: self.moveItemMenu(True))
-        self.qtMenuButtonDown.clicked.connect(lambda: self.moveItemMenu(False))
 
+        #Context Menus
         self.qtViandesColumnTree.customContextMenuRequested.connect(self.viandeContextMenu)
         self.qtLegumesColumnTree.customContextMenuRequested.connect(self.legumeContextMenu)
         self.qtFeculentsColumnTree.customContextMenuRequested.connect(self.feculentContextMenu)
@@ -371,6 +497,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.qtTreeRecipe.customContextMenuRequested.connect(self.recipeContextMenu)
         self.qtTreeMenu.customContextMenuRequested.connect(self.menuContextMenu)
         self.qtTreeMenu.itemChanged.connect(self.menuChanged)
+
+    def menuTextChanged(self):
+        print('typing')
 
     def checkIngredient(self, widget, items, value):
         #TODO items on right click menu
@@ -460,6 +589,15 @@ class MainWindow(QtWidgets.QMainWindow):
                             legumeList.append((ingredientObj, label))
                         else: #divers
                             diversList.append((ingredientObj, label))
+
+                #Check Menu State
+                if qtItem.checkState(2) == QtCore.Qt.CheckState.Checked:
+                    color = self.uiTheme['menuIsOk_bg']
+                else:
+                    color = QtGui.QBrush()
+                for i in range(3):
+                    qtItem.setBackground(i, color)
+
         # qtItemList = []
         # print(ingredientList)
         # self.qtGroceriesList.clear()
@@ -481,21 +619,6 @@ class MainWindow(QtWidgets.QMainWindow):
             text = '{} : {}g ({})'.format(obj.name, obj.size, label)
             qtItem = QtWidgets.QTreeWidgetItem(parent, [text])
 
-        # for obj in specialList:
-        #     addItem(self.qtGroceriesTree.topLevelItem(0), obj[0], obj[1])
-        #
-        # for obj in viandeList:
-        #     addItem(self.qtGroceriesTree.topLevelItem(1), obj[0], obj[1])
-        #
-        # for obj in legumeList:
-        #     addItem(self.qtGroceriesTree.topLevelItem(2), obj[0], obj[1])
-        #
-        # for obj in diversList:
-        #     addItem(self.qtGroceriesTree.topLevelItem(3), obj[0], obj[1])
-        #
-        # for obj in alwaysAvailableList:
-        #     addItem(self.qtGroceriesTree.topLevelItem(4), obj[0], obj[1])
-
         for objList, widgetIdx in [(specialList, 0), (viandeList, 1), (legumeList, 2), (diversList, 3), (alwaysAvailableList, 4)]:
             parent = self.qtGroceriesTree.topLevelItem(widgetIdx)
             if len(objList) == 0:
@@ -508,8 +631,6 @@ class MainWindow(QtWidgets.QMainWindow):
                     qtItem = QtWidgets.QTreeWidgetItem(parent, [text])
                 parent.sortChildren(0, QtCore.Qt.SortOrder.AscendingOrder)
                 parent.setExpanded(True)
-
-
 
     def moveItemMenu(self, up=True):
         selection = self.qtTreeMenu.currentItem()
@@ -557,8 +678,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def GenericContextMenu(self, widget, position):
         item = widget.currentItem()
         self.qtRecipeContextMenu = QtWidgets.QMenu(self)
-        addToMenuAction = QtGui.QAction('Add To Selected Menu')
-        replaceMenuAction = QtGui.QAction('Replace Selected Menu')
+        addToMenuAction = QtGui.QAction(self.icons['add'], 'Add To Selected Menu')
+        replaceMenuAction = QtGui.QAction(self.icons['replace'], 'Replace Selected Menu')
         addToMenuAction.triggered.connect(lambda: self.addToMenu(item.text(0), False, item.data(0, QtCore.Qt.ItemDataRole.UserRole)))
         replaceMenuAction.triggered.connect(lambda: self.addToMenu(item.text(0), True, item.data(0, QtCore.Qt.ItemDataRole.UserRole)))
         self.qtRecipeContextMenu.addAction(addToMenuAction)
@@ -601,21 +722,112 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def menuContextMenu(self, position):
         position = self.qtTreeMenu.viewport().mapToGlobal(position)
-        item = self.qtTreeMenu.currentItem()
+        # item = self.qtTreeMenu.currentItem()
         self.qtMenuContextMenu = QtWidgets.QMenu(self)
-        autreReplaceMenuAction = QtGui.QAction('Autre')
-        restesReplaceMenuAction = QtGui.QAction('Restes')
-        restaurantReplaceMenuAction = QtGui.QAction('Restaurant')
-        clearReplaceMenuAction = QtGui.QAction('Supprimer Menu')
+        qtManualEditAction = QtGui.QAction(self.icons['edit'], 'Editer à la main')
+        qtsearchMenuAction = QtWidgets.QWidgetAction(self.qtMenuContextMenu)
+        qtLineEdit = QtWidgets.QLineEdit()
+        qtLineEdit.setClearButtonEnabled(True)
+        qtLineEdit.addAction(self.icons['search'], QtWidgets.QLineEdit.ActionPosition.LeadingPosition)
+        qtLineEdit.setPlaceholderText('search ingredients and recipes')
+        qtsearchMenuAction.setDefaultWidget(qtLineEdit)
+
+
+        # self.qtIngredientPosition = position + QtCore.QPoint(150, 0)
+        # self.qtMenuPosition = position
+        # self.menuFilter('')
+        qtLineEdit.textChanged.connect(lambda: self.menuFilter(qtLineEdit.text()))
+
+        autreReplaceMenuAction = QtGui.QAction(self.icons['menu'], 'Autre')
+        restesReplaceMenuAction = QtGui.QAction(self.icons['menu'], 'Restes')
+        restaurantReplaceMenuAction = QtGui.QAction(self.icons['menu'], 'Restaurant')
+        clearReplaceMenuAction = QtGui.QAction(self.icons['clear'], 'Supprimer Menu')
+        addMealMenuAction = QtGui.QAction(self.icons['add'], 'Ajouter un repas')
+
+        qtManualEditAction.triggered.connect(self.manualMenuEdit)
         autreReplaceMenuAction.triggered.connect(lambda: self.addToMenu('Autre', True, None))
         restesReplaceMenuAction.triggered.connect(lambda: self.addToMenu('Restes', True, None))
         restaurantReplaceMenuAction.triggered.connect(lambda: self.addToMenu('Restaurant', True, None))
         clearReplaceMenuAction.triggered.connect(lambda: self.addToMenu('', True, None))
+        addMealMenuAction.triggered.connect(self.addMealToMenu)
+
+        self.qtMenuContextMenu.addAction(qtManualEditAction)
+        self.qtMenuContextMenu.addAction(qtsearchMenuAction)
         self.qtMenuContextMenu.addAction(autreReplaceMenuAction)
         self.qtMenuContextMenu.addAction(restesReplaceMenuAction)
         self.qtMenuContextMenu.addAction(restaurantReplaceMenuAction)
         self.qtMenuContextMenu.addAction(clearReplaceMenuAction)
+        self.qtMenuContextMenu.addAction(addMealMenuAction)
         self.qtMenuContextMenu.exec(position)
+
+    def manualMenuEdit(self): #TODO
+        print('edit a la main')
+
+    def menuFilter(self, filterText): #TODO Open search result in context menu
+        # self.qtIngredientMenu = QtWidgets.QMenu(self)
+        # print("filterText at ", self.qtIngredientPosition)
+        # if filterText.strip() != '':
+        #     filtered = self.ingredientsDb.filterIngredients(filterText.strip())
+        # else:
+        #     filtered = []
+        # qtlist = []
+        # for obj, match in filtered:
+        #     if match:
+        #         qtObjAction = QtGui.QAction(obj.name)
+        #         qtlist.append(qtObjAction)
+        # self.qtIngredientMenu.addActions(qtlist)
+        # self.qtIngredientMenu.popup(self.qtIngredientPosition)
+        # self.qtMenuContextMenu.insertMenu(self.qtsearchMenuAction, self.qtIngredientMenu)
+        # self.qtMenuContextMenu.update()
+        if filterText != '':
+            self.qtIngredientFilter.setText(filterText)
+            self.qtRecipeFilter.setText(filterText)
+
+    def addMealToMenu(self):
+        def buildPrompt(dayName, meal):
+            dialog = QtWidgets.QDialog(parent=self.qtTreeMenu)
+            dialog.setWindowTitle("Ajouter un repas à {}".format(dayName))
+            layout = QtWidgets.QVBoxLayout()
+            dialog.setLayout(layout)
+            label = QtWidgets.QLabel(dayName)
+            lineEdit = QtWidgets.QLineEdit()
+            lineEdit.setPlaceholderText('nom du repas à ajouter')
+            combo = QtWidgets.QComboBox()
+            combo.addItems(['Avant', 'Après'])
+            meallabel = QtWidgets.QLabel('le {}'.format(meal))
+            all = QtWidgets.QDialogButtonBox()
+            all.addButton("Ok", QtWidgets.QDialogButtonBox.ButtonRole.AcceptRole)
+            all.addButton("Cancel", QtWidgets.QDialogButtonBox.ButtonRole.RejectRole)
+            all.accepted.connect(dialog.accept)
+            all.rejected.connect(dialog.reject)
+            layout.addWidget(label)
+            layout.addWidget(lineEdit)
+            layout.addWidget(combo)
+            layout.addWidget(meallabel)
+            dialog.accepted.connect(lambda: acceptedPrompt(lineEdit.text(), combo.currentIndex()))
+            layout.addWidget(all)
+            return dialog
+
+        def acceptedPrompt(name, index):
+            item = self.qtTreeMenu.currentItem()
+            itemindex = self.qtTreeMenu.indexFromItem(item, 0)
+            parent = item.parent()
+            if name.strip() == '':
+                return
+            for dayObj in self.dayDb.dayList:
+                if parent.text(0) == dayObj.name:
+                    dayObj.__setattr__(name, None)
+                    break
+
+            qtItem = self.createMenuQtItem(None, [name, '', ''])
+            parent.insertChild(itemindex.row()+index, qtItem)
+            dayObj.qtItems.append(qtItem)
+
+        item = self.qtTreeMenu.currentItem()
+        currentParent = item.parent()
+        if currentParent:
+            buildPrompt(currentParent.text(0), item.text(0)).exec()
+
 
     def addToMenu(self, menuText, replace=True, obj=None):
         menu = self.getMenuSelection()
@@ -688,15 +900,29 @@ class MainWindow(QtWidgets.QMainWindow):
                         vis = True
                         break
                 item.setHidden(not vis)
+        if self.qtFilterByIngredientCheckBox.checkState() == QtCore.Qt.CheckState.Checked:
+            self.filterRecipe()
+
+    def ingredientTreeSelectionChanged(self):
+        if self.qtFilterByIngredientCheckBox.checkState() == QtCore.Qt.CheckState.Checked:
+            if self.qtFilterByIngredientCombo.currentText() in ['Selected Ingredients', 'Visible Ingredients']:
+                self.filterRecipe()
+
+    def ingredientTreeCheckChanged(self):
+        if self.qtFilterByIngredientCheckBox.checkState() == QtCore.Qt.CheckState.Checked:
+            if self.qtFilterByIngredientCombo.currentText() in 'Checked Ingredients':
+                self.filterRecipe()
 
     def filterRecipe(self):
-        def retrieveIngredientList(choice): # TODO convert qtitem to ingredientobj
+        def retrieveIngredientList(choice):
             ingredientList = []
             for name, widget in self.ingredientWidgetList:
                 if choice == 'Selected Ingredients':
                     for item in widget.selectedItems():
                         ingredientList.append(item.data(0, QtCore.Qt.ItemDataRole.UserRole))
-                else:
+                    if len(ingredientList) == 0:
+                        choice = 'Visible Ingredients'
+                if choice != 'Selected Ingredients':
                     itemsCount = widget.topLevelItemCount()
                     for idx in range(itemsCount):
                         item = widget.topLevelItem(idx)
@@ -705,17 +931,15 @@ class MainWindow(QtWidgets.QMainWindow):
                             children = [item]
                         else:
                             children = [item.child(x) for x in range(childrenCount)]
-                        print(item.text(0), children)
                         for child in children:
                             if choice == 'Checked Ingredients':
-                                print(child.text(0), child.checkState(0), bool(child.checkState(0)))
+                                # print(child.text(0), child.checkState(0), bool(child.checkState(0)))
                                 if child.checkState(0) == QtCore.Qt.CheckState.Checked:
-                                    print('add')
                                     ingredientList.append(child.data(0, QtCore.Qt.ItemDataRole.UserRole))
                             else: # visible ingredients
                                 if child.isHidden() is False:
                                     ingredientList.append(child.data(0, QtCore.Qt.ItemDataRole.UserRole))
-            print('ingredientList : ', ingredientList)
+            # print('ingredientList : ', ingredientList)
             return ingredientList
 
         def keepItemThatMatch(filtered):
@@ -726,36 +950,36 @@ class MainWindow(QtWidgets.QMainWindow):
             return kept
 
         # filter by tab
-        print('tab filter')
         tabType = self.qtgroupBox.tabText(self.qtgroupBox.currentIndex())
         if tabType == "Toutes":
             filtered = [(obj, True) for obj in self.recipeDb.recipeList]
         else:
             tabType = tabType[:-1]
             filtered = self.recipeDb.filterRecipe(tabType, [], 'type')
-        print('filtered tab :', filtered)
+        # print('filtered tab :', filtered)
+
+        #filter by recipe name
+        kept = keepItemThatMatch(filtered)
+        filtered = self.recipeDb.filterRecipe(self.qtRecipeFilter.text(), kept, 'match_name')
+        kept = keepItemThatMatch(filtered)
+        print('kept from recipe name:', kept)
 
         #filter by ingredient filter
-        kept = keepItemThatMatch(filtered)
-        print('kept from tab:', kept)
-        if self.qtFilterByIngredientCombo.currentText() == 'Ignore Ingredient Filter':
-            print('ignore ingredient ok')
-            pass
-        else:
+
+        if self.qtFilterByIngredientCheckBox.checkState() == QtCore.Qt.CheckState.Checked:
             ingredientList = retrieveIngredientList(self.qtFilterByIngredientCombo.currentText())
-            filtered = self.recipeDb.filterRecipe(ingredientList, kept, 'ingredients')
+            filtered = self.recipeDb.filterRecipeIngredients(ingredientList, kept)
             kept = keepItemThatMatch(filtered)
-        print('filtered ingredient : ', filtered)
-        print('kept ingredient : ', kept)
+            print('kept ingredient : ', kept)
 
         #filter by recipe filter text TODO
 
 
 
         #apply results
-        filtered = [(x, x in self.recipeDb.recipeList) for x in kept]
-        # print((obj, val) for x in filtered)
+        filtered = [(x, x in kept) for x in self.recipeDb.recipeList]
         for recipeObj, match in filtered:
+            # print('set vis', recipeObj.name, match, recipeObj.qtitems)
             for qtItem in recipeObj.qtitems:
                 qtItem.setHidden(not match)
 
@@ -774,6 +998,8 @@ class MainWindow(QtWidgets.QMainWindow):
             qtcategory.setHidden(not vis)
 
 
+AppWindowsId = 'Recette'
+ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(AppWindowsId)
 sys.argv += ['-platform', 'windows:darkmode=2']
 app = QtWidgets.QApplication(sys.argv)
 app.setStyle('Fusion')

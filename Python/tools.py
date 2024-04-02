@@ -392,7 +392,7 @@ class Search:
 
     def matchEachItemToWholeSearch(self, itemMatchList, wholeSearch, itemMatchIsObject=False, itemMatchAttribute='match_name'):
         searchedItems = self.splitWholeSearchToItemParts(wholeSearch)
-        print(searchedItems)
+        # print(searchedItems)
         resultList = []
         for itemMatch in itemMatchList:
             match = False
@@ -401,12 +401,14 @@ class Search:
                     result = self.searchTextPartsInItemMatchList(searchedItem, itemMatch)
                 else:
                     matchAttribute = getattr(itemMatch, itemMatchAttribute)
+                    # print('match is object:', matchAttribute)
                     result = self.searchTextPartsInItemMatchList(searchedItem, matchAttribute)
                 if result is True:
                     match = True
                     print("found", itemMatch.name)
                     break
             resultList.append((itemMatch, match))
+        print('resultlist:', resultList)
         return resultList
 
 

@@ -2,7 +2,7 @@ import sys
 import os
 import shutil
 from time import localtime, strftime
-import prod.tools
+import tools
 
 def incrementalBackup(filePath=sys.argv[0], backupFolder=None, verbose = False):
     '''
@@ -105,7 +105,7 @@ def restoreFilesPrompt(path=None, generalBackupFolder="_backups", fileProperties
         backupedFiles = os.listdir(path)
 
         message = "Choose which Folder to restore : ..."
-        chosenFolder = prod.tools.promptFormatting(backupedFiles, message)
+        chosenFolder = tools.promptFormatting(backupedFiles, message)
         print(chosenFolder)
 
         if verbose >= 1:
@@ -144,7 +144,7 @@ def restoreFilesPrompt(path=None, generalBackupFolder="_backups", fileProperties
 
     if len(versionList) > 1:
         message = "Choose which File(s) to restore (multi files separated by '/''): ..."
-        chosenFiles = prod.tools.promptFormatting(sorted(versionList.keys()), message)
+        chosenFiles = tools.promptFormatting(sorted(versionList.keys()), message)
     else:
         message = list(versionList)
         chosenFiles = [[0, message[0]]]
@@ -158,8 +158,8 @@ def restoreFilesPrompt(path=None, generalBackupFolder="_backups", fileProperties
     for key in chosenFiles:
         key = key[1]
         message = "Choose '"+ key +"' Versionning : ..."
-        chosenVersion = prod.tools.promptFormatting(versionList[key], message, processFor=["readableTimeFormat"])
-        version = prod.tools.processStringName(chosenVersion[0][1], ["compactTimeFormat"])
+        chosenVersion = tools.promptFormatting(versionList[key], message, processFor=["readableTimeFormat"])
+        version = tools.processStringName(chosenVersion[0][1], ["compactTimeFormat"])
         if os.path.isfile(path+"/"+version+"_"+key) == False:
             print("WARNING : Error, while processing backuped file name")
             user = input("Nothing done : ABORTING")

@@ -53,6 +53,7 @@ class PhoneBackup():
                  'videoExtensionList': [".webm", ".mkv", ".avi", ".mov", ".wmv", ".mp4", ".mpg", ".mpeg", ".m4v"],
                  'backups': {
                      'Photos': ['{}/DCIM/Camera', '{}/Photos', True],
+                     # 'PhotosStorage': ['/storage/FAD7-EB87/DCIM/Camera', '{}/Photos', True],
                      'WhatsApp Video': ['{}/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video',
                                         '{}/WhatsApp Videos', True],
                      'WhatsApp Photo': ['{}/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images',
@@ -62,7 +63,8 @@ class PhoneBackup():
                      'aGarder': ['{}/_aGarder', '{}/DCIM/_aGarder', False],
                  },
                     'pathReplace': {
-                     'Signal': '{}/Signal Photos',
+                    'Signal': '{}/Signal Photos',
+                    'WhatsApp': '{}/WhatsApp Photos',
                  },
                     'adb': {
                      'adbServerPath': "D:/Desktop/copie photos maman/adb_platform-tools_r34.0.5-windows/platform-tools",
@@ -161,6 +163,13 @@ class PhoneBackup():
             return True
         else:
             return False
+
+    def setModificationTime(self):
+        #name = "IMG-20210916-WA0002.jpg"
+        time = name.split('-')[0]
+        time = time.strptime(time, "%Y%m%d")
+        time = time.mktime(time)
+        os.utime(file, (time, time))
 
     def listPhonePath(self, currentBackup):
         src = self.cfg['backups'][currentBackup][0]
@@ -342,6 +351,8 @@ class PhoneBackup():
         if fileObj.backupName != 'aGarder':
             if fileObj.path.endswith('Pictures') is True and fileObj.name.startswith('signal-') is True:
                 outPath = self.cfg['pathReplace']['Signal'].format(self.cfg['rootOut'])
+            elif "Pictures" in fileObj.path and fileObj.name.startswith("IMG-"):
+                outPath = self.cfg['pathReplace']['WhatsApp'].format(self.cfg['rootOut'])
             else:
                 midpath = os.path.commonpath([self.cfg['backups'][fileObj.backupName][0].format(self.cfg['rootIn']), fileObj.path])
                 midpath = fileObj.path[len(midpath):]
@@ -545,7 +556,11 @@ if __name__ == "__main__":
     c.printTree()
     c.fileTreeCopy(copy=True)
 
+# c = PhoneBackup(adblib=adblib)
+# c.fullAdbConnect()
 # l = c.phone.shell("ls /sdcard/Documents/*-file-list.tmp")
+# l = c.phone.shell("ls /storage/emulated/0/DCIM/Camera")
+# print(l)
 # l = c.phone.shell("ls /")
 # c.rescan()
 # print(l)

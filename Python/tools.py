@@ -1,5 +1,5 @@
 from time import strptime, strftime
-from pprint import pprint as pprint
+import pprint
 import os
 import shutil
 
@@ -22,40 +22,63 @@ def customPrint(msg, verboseLevel=0, title=None, onlyTitle=False, verbose=0):
             print(title)
             if onlyTitle is True:
                 return
-        pprint(msg)
+        pprint.pprint(msg)
 
 
 class CustomPrint:
-    def __init__(self, class_verbose, dev):
-        self.class_verbose = class_verbose
-        self.dev = dev  # TODO How To manage ?
+    #TODO use logging module ?
+    #TODO write log file
+    #TODO Add colors
+    def __init__(self, minimum_verbose_level=0):
+        self.verbose = minimum_verbose_level
+        self.title_level = 6
+        self.infoLevel = 'Info' #Info / Warn / Error
+        self.displayInfoLevel = True
+        self.pprint = pprint.PrettyPrinter(indent=4)
+        # self.dev = False  # TODO Why ? How To manage ?
 
-    def __call__(self, msg, verbose_level=0, title=None, only_title=False, title_level=6):
-        self.cprint(msg, verbose_level, title, only_title, title_level)
+    def __call__(self, msg, verbose_level=0, title=None, only_title=False, title_level=None, infoLevel=None):
+        self.cprint(msg, verbose_level, title, only_title, title_level, infoLevel)
 
-    def cprint(self, msg, verbose_level=0, title=None, only_title=False, title_level=6):
-        if self.dev is True and verbose_level > 0:
-            return
-        if self.class_verbose >= verbose_level:
+    def cprint(self, msg, verbose_level=0, title=None, only_title=False, title_level=None, infoLevel=None):
+        if infoLevel is None:
+            infoLevel = self.infoLevel
+        if self.verbose >= verbose_level:
             if title is not None:
+                if title_level is None:
+                    title_level = self.title_level
+                title = str(title) # TODO Manage Objects
+                title = '{0}{1} {2} {3}{0}'.format('-' * title_level * 2, '>' * title_level, title, '<' * title_level)
+                if self.displayInfoLevel is True:
+                    title = '{}\t{}'.format(infoLevel, title)
+                print(title)
                 if only_title is True:
-                    print('{0}{1} {2} {3}{0}'.format('-'*title_level*2, '>'*title_level, str(title), '<'*title_level))
                     return
-                else:
-                    print('---------------->>>>>> ' + str(title))
-            pprint(msg)
+
+            if self.displayInfoLevel is True:
+                lines = self.pprint.pformat(msg).split('\n')
+                for line in lines:
+                    print('{}\t{}'.format(infoLevel, line))
+            else:
+                self.pprint.pprint(msg)
+
+    def warning(self, msg, verbose_level=0, title=None, only_title=False, title_level=None, infoLevel='Warn'):
+        self.cprint(msg, verbose_level, title, only_title, title_level, infoLevel)
+
+    def error(self, msg, verbose_level=0, title=None, only_title=False, title_level=None, infoLevel='Error'):
+        self.cprint(msg, verbose_level, title, only_title, title_level, infoLevel)
 
     def title(self, title, verbose_level=0):
         self.cprint('', verbose_level, title, True)
 
     def title1(self, title, verbose_level=0,):
-        self.cprint('', verbose_level, title, True, 6)
+        self.cprint('', verbose_level, title, True, self.title_level)
 
     def title2(self, title, verbose_level=0,):
-        self.cprint('', verbose_level, title, True, 4)
+        self.cprint('', verbose_level, title, True, int(self.title_level/3*2))
 
     def title3(self, title, verbose_level=0,):
-        self.cprint('', verbose_level, title, True, 2)
+        self.cprint('', verbose_level, title, True, int(self.title_level/3))
 
 
 def processStringName(stringName, processFor, noError=True):
@@ -251,7 +274,6 @@ def autoComplete(stringSearched, autoCompletionList, splitWords=",", splitChars=
     if verbose >= 1:
         print("-- >> returning : "+str(matched))
     return(matched)
-
 
 def matchItems(stringSearched, matchingPatternDic, splitChars="&&", exclChar="!=", verbose = 0):
     import re

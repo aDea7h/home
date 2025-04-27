@@ -255,10 +255,10 @@ class RecursiveWalk:
             dic = self.list_recursive(self.path, self.file_tree, 0)
             if self.cfg['file_tree_is_nested'] is True:
                 self.file_tree = dic
-            self.cprint(self.file_tree, 1)
+            # self.cprint(self.file_tree, 1)
 
     def list_recursive(self, path, dic, recursion=0):  # return nested dict or flattened dict
-        self.cprint('listing files in : {}'.format(path), 1)
+        # self.cprint('listing files in : {}'.format(path), 1)
         #files = os.listdir(path)
         files = self.Ls.ls(path)
         for file_name in files:
@@ -268,16 +268,17 @@ class RecursiveWalk:
                     if result != {} and self.cfg['file_tree_is_nested'] is True:
                         dic[file_name] = result
             else:
-                self.cprint((path, file_name), 1)
+                # self.cprint((path, file_name), 1)
                 file_obj = FileObj(path, file_name, self.cfg, self.attrs)
                 if self.filter_file(file_obj) is True:
-                    self.cprint('adding file : {}'.format(file_name), 1)
+                    # self.cprint('adding file : {}'.format(file_name), 1)
                     if self.cfg['file_tree_is_nested'] is True:
                         dic[file_name] = file_obj
                     else:
                         self.file_tree[os.path.join(file_obj.path, file_obj.name)] = file_obj
                 else:
-                    self.cprint('rejecting : {}'.format(file_name), 1)
+                    # self.cprint('rejecting : {}'.format(file_name), 1)
+                    pass
         return dic
 
     """
@@ -499,4 +500,5 @@ if __name__ == '__main__':
     # r.print_tree(path_log)
 
 
-    CompareWithLog(path, path_log)
+    # CompareWithLog(path, path_log)
+    CompareWithLog('F:\DivX', "D:\Desktop\log.txt")

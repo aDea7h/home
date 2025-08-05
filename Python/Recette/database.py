@@ -8,33 +8,57 @@ from incrementalBackup import incrementalBackup
     # TEXT
     # BLOB > images / mp3 ... = data
 
-def convertIngredientObjToId(obj):
-    #ingredientsId = [ingredient.id for ingredient in obj.ingredients]
-    ingredientList = []
-    print('conforming ingredients')
-    print(obj.ingredients)
+# def convertIngredientObjToId(obj):
+#     #ingredientsId = [ingredient.id for ingredient in obj.ingredients]
+#     ingredientList = []
+#     print('conforming ingredients')
+#     print(obj.ingredients)
+#     if obj.ingredients in [None, '']:
+#         return ''
+#     for ingredient in obj.ingredients:
+#         print(ingredient)
+#         print(ingredient.id)
+#         if ingredient.id == -1:
+#             ingredientList.append(ingredient.name)
+#         else:
+#             ingredientList.append(str(ingredient.id))
+#             # ingredientList.append('{}.{}'.format(type(ingredient).__name__, ingredient.id))
+#             # print('converting ingredient {}, {} to {}.{}'.format(ingredient, ingredientName, type(ingredient).__name__, ingredient.id))
+#     return ', '.join(ingredientList)
+
+def conformIngredientObjInRecipe(obj):
     if obj.ingredients in [None, '']:
-        return ''
-    for ingredient in obj.ingredients:
-        print(ingredient)
-        print(ingredient.id)
-        if ingredient.id == -1:
-            ingredientList.append(ingredient.name)
+        obj.dbIngredients = ''
+        return obj
+    ingredientList = []
+    for ingredientObj in obj.ingredients:
+        if ingredientObj.id < 0:
+            ingredientList.append((ingredientObj.name, ingredientObj.size))
         else:
-            ingredientList.append(str(ingredient.id))
-            # ingredientList.append('{}.{}'.format(type(ingredient).__name__, ingredient.id))
-            # print('converting ingredient {}, {} to {}.{}'.format(ingredient, ingredientName, type(ingredient).__name__, ingredient.id))
-    return ', '.join(ingredientList)
+            ingredientList.append((ingredientObj.id, ingredientObj.size))
+    obj.dbIngredients = str(ingredientList)
+    return obj
 
 def conformObjToDBDatas(obj):
     for attr in obj.__dict__:
         attrType = type(obj.__dict__[attr]).__name__
         print(attr, attrType, obj.__dict__[attr])
         if attrType == 'list':
+            print("converting LIST attr {} to STR : {}".format(attr, obj.__dict__[attr]))
             obj.__dict__[attr] = str(obj.__dict__[attr])
         elif attrType == 'bool':
+            print("converting BOOL attr {} to INT : {}".format(attr, obj.__dict__[attr]))
             obj.__dict__[attr] = int(obj.__dict__[attr])
     return obj
+
+def conformRating(obj):
+    if(obj.is_tested == False):
+        obj.rating = -1
+    if(obj.is_favorite == True):
+        obj.rating = 10
+    return obj
+
+
 
 
 # ###############
@@ -354,25 +378,21 @@ class DB:
     def addToRecipe(self, recipeObj):
         if self.backupDB is True:
             incrementalBackup(self.pathToRecipeDb)
-        print(recipeObj.ingredients)
-        recipeObj.ingredients = convertIngredientObjToId(recipeObj)
-        print(recipeObj.ingredients)
+        recipeObj = conformIngredientObjInRecipe(recipeObj)
         recipeObj = conformObjToDBDatas(recipeObj)
-        #sqlQuery = "INSERT INTO recipes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        #data = (recipeObj.name, recipeObj.category_id, recipeObj.type, recipeObj.suggestion, recipeObj.match_name, recipeObj.special_ingredient, recipeObj.is_fast, recipeObj.is_tested, recipeObj.is_wip, recipeObj.origin, recipeObj.ingredients, recipeObj.recipe_path, recipeObj.recipe)
+        recipeObj = conformRating(recipeObj)
         sqlQuery = "INSERT INTO recipes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        data = (recipeObj.name, recipeObj.match_name, recipeObj.category_id, recipeObj.type, recipeObj.origin, recipeObj.tags, recipeObj.ingredients, recipeObj.before_recipe, recipeObj.recipe, recipeObj.suggestion, recipeObj.notes, recipeObj.files, recipeObj.cooking_time, recipeObj.preparation_time, recipeObj.is_best_reheated, recipeObj.rating, recipeObj.is_wip)
+        data = (recipeObj.name, recipeObj.match_name, recipeObj.category_id, recipeObj.type, recipeObj.origin, recipeObj.tags, recipeObj.dbIngredients, recipeObj.before_recipe, recipeObj.recipe, recipeObj.suggestion, recipeObj.notes, recipeObj.files, recipeObj.cooking_time, recipeObj.preparation_time, recipeObj.is_best_reheated, recipeObj.rating, recipeObj.is_wip)
         self.executeQuery((sqlQuery, data), True)
 
     def editRecipe(self, recipeObj):
         if self.backupDB is True:
             incrementalBackup(self.pathToRecipeDb)
-        recipeObj.ingredients = convertIngredientObjToId(recipeObj)
+        recipeObj = conformIngredientObjInRecipe(recipeObj)
         recipeObj = conformObjToDBDatas(recipeObj)
-        #sqlQuery = """UPDATE recipes set name = ?, category_id = ?, type = ?, suggestion = ?, match_name = ?, special_ingredient = ?, is_fast = ?, is_tested = ?, is_wip = ?, origin = ?, ingredients = ?, recipe_path = ?, recipe = ? WHERE rowid = ?"""
-        #data = (recipeObj.name, recipeObj.category_id, recipeObj.type, recipeObj.suggestion, recipeObj.match_name, recipeObj.special_ingredient, recipeObj.is_fast, recipeObj.is_tested, recipeObj.is_wip, recipeObj.origin, recipeObj.ingredients, recipeObj.recipe_path, recipeObj.recipe, recipeObj.id)
+        recipeObj = conformRating(recipeObj)
         sqlQuery = """UPDATE recipes set name = ?, match_name = ?, category_id = ?, type = ?, origin = ?, tags = ?, ingredients = ?, before_recipe = ?, recipe = ?, suggestion = ?, notes = ?, files = ?, cooking_time = ?, preparation_time = ?, is_best_reheated = ?, rating = ?, is_wip = ? WHERE rowid = ?"""
-        data = (recipeObj.name, recipeObj.match_name, recipeObj.category_id, recipeObj.type, recipeObj.origin, recipeObj.tags, recipeObj.ingredients, recipeObj.before_recipe, recipeObj.recipe, recipeObj.suggestion, recipeObj.notes, recipeObj.files, recipeObj.cooking_time, recipeObj.preparation_time, recipeObj.is_best_reheated, recipeObj.rating, recipeObj.is_wip)
+        data = (recipeObj.name, recipeObj.match_name, recipeObj.category_id, recipeObj.type, recipeObj.origin, recipeObj.tags, recipeObj.dbIngredients, recipeObj.before_recipe, recipeObj.recipe, recipeObj.suggestion, recipeObj.notes, recipeObj.files, recipeObj.cooking_time, recipeObj.preparation_time, recipeObj.is_best_reheated, recipeObj.rating, recipeObj.is_wip, recipeObj.id)
         self.executeQuery((sqlQuery, data), True)
 
     def removeRecipe(self, id):
@@ -396,16 +416,16 @@ class DB:
     def addToStock(self, stockObj):
         if self.backupDB is True:
             incrementalBackup(self.pathToCustom)
-        ingredients = convertIngredientObjToId(stockObj)
-        sqlQuery = "INSERT INTO stocks VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (stockObj.name, stockObj.category, stockObj.servingsQuantity, stockObj.servingsUnit, stockObj.nbr, stockObj.dateName, stockObj.dateIsExpirationDate, ingredients) 
+        stockObj = conformIngredientObjInRecipe(stockObj)
+        sqlQuery = "INSERT INTO stocks VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (stockObj.name, stockObj.category, stockObj.servingsQuantity, stockObj.servingsUnit, stockObj.nbr, stockObj.dateName, stockObj.dateIsExpirationDate, stockObj.dbIngredients)
         self.executeQuery(sqlQuery, True)
 
     def editStock(self, stockObj):
         if self.backupDB is True:
             incrementalBackup(self.pathToCustom)
-        ingredients = convertIngredientObjToId(stockObj)
+        stockObj = conformIngredientObjInRecipe(stockObj)
         sqlQuery = """UPDATE stocks set name = ?, category = ?, servingsQuantity = ?, servingsUnit = ?, nbr = ?, dateName = ?, dateIsExpirationDate = ?, ingredients = ? WHERE rowid = ?"""
-        data = (stockObj.name, stockObj.category, stockObj.servingsQuantity, stockObj.servingsUnit, stockObj.nbr, stockObj.dateName, stockObj.dateIsExpirationDate, ingredients, stockObj.id)
+        data = (stockObj.name, stockObj.category, stockObj.servingsQuantity, stockObj.servingsUnit, stockObj.nbr, stockObj.dateName, stockObj.dateIsExpirationDate, stockObj.dbIngredients, stockObj.id)
         self.executeQuery((sqlQuery, data), True)
 
     def removeStock(self, id):
@@ -413,3 +433,22 @@ class DB:
             incrementalBackup(self.pathToCustom)
         sqlQuery = """DELETE from stocks WHERE rowid = {}""".format(id)
         self.executeQuery(sqlQuery, True)
+
+
+    ###############
+    # Config Table
+    ###############
+
+    def get_preferences(self):
+        sqlQuery = """SELECT rowid, * FROM config"""
+        self.executeQuery(sqlQuery, False)
+        items = self.cursor.fetchall()
+        self.commit()
+        return items
+
+    def edit_preferences(self, prefs):
+        if self.backupDB is True:
+            incrementalBackup(self.pathToCustom)
+        sqlQuery = """UPDATE config set Key = ?, Value = ? WHERE rowid = ?"""
+        data = (prefs['key'], prefs['value'], prefs['id'])
+        self.executeQuery((sqlQuery, data), True)

@@ -1,4 +1,5 @@
 from PySide6 import QtCore, QtGui, QtWidgets
+from TextEditorWidget import TextEdit
 
 
 class GenericWidget(QtWidgets.QWidget):
@@ -122,8 +123,11 @@ class RecipeWidget(QtWidgets.QWidget):
         self.qtFilterByIngredientCombo.addItems(
             ['Selected Ingredients', 'Visible Ingredients', 'Checked Ingredients'])
 
-        self.qtTreeRecipe.setColumnCount(1)
-        self.qtTreeRecipe.setHeaderHidden(True)
+        self.qtTreeRecipe.setColumnCount(6)
+        # self.qtTreeRecipe.setHeaderHidden(True)
+        qtItem = QtWidgets.QTreeWidgetItem(['Recipe Name', 'Badges', 'Ingredients', 'Preparation Time', 'Total Time', 'Extra Infos'])
+        # qtItem.setIcon(0, self.ui['icons']['star_empty'])
+        self.qtTreeRecipe.setHeaderItem(qtItem)
         self.qtTreeRecipe.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 
         # ----->> Set Layout
@@ -305,7 +309,7 @@ class RecipeContentWidget(QtWidgets.QWidget): #QDialog
         self.qtTagsLineEdit = QtWidgets.QLineEdit()
         # recipe content
         self.qtIngredients = QtWidgets.QTreeWidget()
-        self.qtBeforeRecipeText = QtWidgets.QTextEdit()
+        self.qtBeforeRecipeText = TextEdit()
         self.qtRecipeText = QtWidgets.QTextEdit()
         self.qtSuggestionTree = QtWidgets.QTreeWidget()
         self.qtNoteText = QtWidgets.QTextEdit()
@@ -347,14 +351,14 @@ class RecipeContentWidget(QtWidgets.QWidget): #QDialog
         self.qtOriginTree.setHeaderItem(QtWidgets.QTreeWidgetItem(["Recipe's origin"]))
         self.qtOriginTree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.qtTagsLineEdit.setPlaceholderText('tags (separated by ",")')
-        self.qtIngredients.setHeaderItem(QtWidgets.QTreeWidgetItem(['Ingredients']))
+        self.qtIngredients.setColumnCount(2)
+        self.qtIngredients.setHeaderItem(QtWidgets.QTreeWidgetItem(['Ingredients', 'Servings']))
         self.qtIngredients.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.qtSuggestionTree.setHeaderItem(QtWidgets.QTreeWidgetItem(["Side Dish Suggestion"]))
         self.qtCookingFullTimeLineEdit.setEnabled(False)
         self.qtFilesTree.setHeaderItem(QtWidgets.QTreeWidgetItem(["Photos / Files"]))
 
         # ----->> Setup Ui
-
 
         self.layout = QtWidgets.QGridLayout()
         self.setLayout(self.layout)
@@ -471,7 +475,7 @@ class RecipeContentWidget(QtWidgets.QWidget): #QDialog
         self.qtPreparationTimeSpin.setValue(0)
         # self.qtCookingFullTimeLineEdit = QtWidgets.QLineEdit()
         self.qtIsBestReheatedCheckBox.setChecked(False)
-        self.qtRatingRadio0.setChecked(False)
+        self.qtRatingRadio0.setChecked(True)
         self.qtRatingRadio1.setChecked(False)
         self.qtRatingRadio2.setChecked(False)
         self.qtRatingRadio3.setChecked(False)

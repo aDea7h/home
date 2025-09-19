@@ -46,8 +46,9 @@ def incrementalBackup(filePath=sys.argv[0], backupFolder=None, verbose = False):
     #versionFile
     i = 1
     while i > 0:
-        #versionFile = str(i).rjust(3, "0")
+        versionFile = str(i).rjust(3, "0")
         backupedFileName = localDate+"-"+localTime+"_"+fileName+fileExtension+appendName
+        backupedFileName = f'{localDate}-{localTime}-{versionFile}_{fileName}{fileExtension}{appendName}'
         if os.path.isfile("%s/%s" % (backupFolder, backupedFileName)) == True:
             i = i + 1
             print ("%s Already exists" % (backupedFileName))

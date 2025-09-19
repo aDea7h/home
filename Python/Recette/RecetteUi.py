@@ -28,6 +28,7 @@ stock : attach ingredient data to it
 stock : add from recipe / ingredient / crockpot only
 stock : quick add stock ui from menu
 
+bug: impossible de rename une recette // edit recette duplique > doublon
 bug: multi parent are parented to first one
 bug : bobun sort dans ingredient canelle
 bug : filter de recette et trop lent ac ingredients
@@ -726,12 +727,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self.qtEditRecipes = QtGui.QAction("Edit Recipes")
             self.qtImportExportData = QtGui.QAction('Import - Export Data to Ods')
             self.qtSetLibPath = QtGui.QAction('Set Database Path')
+            self.qtReprocessMatchNames = QtGui.QAction('Reprocess Matche Names')
             self.qtToolbar.addAction(self.qtAddIngredient)
             self.qtToolbar.addAction(self.qtEditIngredients)
             self.qtToolbar.addAction(self.qtAddRecipe)
             self.qtToolbar.addAction(self.qtEditRecipes)
             self.qtToolbar.addAction(self.qtImportExportData)
             self.qtToolbar.addAction(self.qtSetLibPath)
+            self.qtToolbar.addAction(self.qtReprocessMatchNames)
             """
             # ----->>HEADER
             self.headerPaneWidget = QtWidgets.QWidget()
@@ -1085,6 +1088,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.qtAddRecipe.triggered.connect(lambda:self.recipeContent('Add'))
         self.qtImportExportData.triggered.connect(self.importExportToDbDialog)
         self.qtSetLibPath.triggered.connect(self.setLibPathDialog)
+        self.qtReprocessMatchNames.triggered.connect(self.reprocessMatchNames)
 
         #Primary Pane
         self.qtGoalAndNotesWidget.qtSaveNotesButton.clicked.connect(self.saveNotes)
@@ -1100,9 +1104,9 @@ class MainWindow(QtWidgets.QMainWindow):
         #Secondary Pane
         self.qtIngredientWidget.qtIngredientFilter.textChanged.connect(self.filterIngredientList)
         # deport to class ?? # TODO
-        # self.qtIngredientWidget.qtIngredientCheckAllButton.clicked.connect(lambda: self.checkIngredient('All', 'All', True))
-        # self.qtIngredientWidget.qtIngredientCheckNoneButton.clicked.connect(lambda: self.checkIngredient('All', 'All', False))
-        # self.qtIngredientWidget.qtIngredientCheckInvertButton.clicked.connect(lambda: self.checkIngredient('All', 'All', -1))
+        # self.qtIngredientWidget.qtIngredientCheckAllButton.clicked.connect(lambda: self.checkInit('All', 'All', True))
+        # self.qtIngredientWidget.qtIngredientCheckNoneButton.clicked.connect(lambda: self.checkInit('All', 'All', False))
+        # self.qtIngredientWidget.qtIngredientCheckInvertButton.clicked.connect(lambda: self.checkInit('All', 'All', -1))
         # self.qtIngredientWidget.qtIngredientSelAllButton.clicked.connect(lambda: self.selIngredient('All', True))
         # self.qtIngredientWidget.qtIngredientSelNoneButton.clicked.connect(lambda: self.selIngredient('All', False))
         # self.qtIngredientWidget.qtIngredientSelInvertButton.clicked.connect(lambda: self.selIngredient('All', -1))
@@ -1264,6 +1268,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.libPath = fileName
         #Repopulate window #TODO
         # self.initDataAndPopulate()
+
+    def reprocessMatchNames(self):
+        #TODO
+        self.ingredientsDb.reprocessMatchNames()
+        self.recipeDb.reprocessMatchNames()
 
     def stockedFood(self, item, edit):
         stockObj = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
@@ -1791,9 +1800,51 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.qtRecipeWidget.qtFilterByIngredientCombo.currentText() in 'Checked Ingredients':
                 self.filterRecipe()
 
+    def getSelectedIngredients(self):
+        ingredientList = []
+        for name, widget in self.qtIngredientWidget.ingredientWidgetList:
+            for item in widget.selectedItems():
+                ingredientList.append(item.data(0, QtCore.Qt.ItemDataRole.UserRole))
+        if len(ingredientList) == 0:  # return all visible items if no selection
+            return self.getVisibleIngredients()
+        print(f'selected Ingredients : {ingredientList}')
+        return ingredientList
+
+    def getVisibleIngredients(self):
+        ingredientList = []
+        for ingredientObj in self.ingredientsDb.ingredientList:
+            qtItems = ingredientObj.qtItem
+            for qtItem in qtItems:
+                if qtItem.isHidden() is False:
+                    ingredientList.append(ingredientObj)
+        print(f'visible ingredients : {ingredientList}')
+        return ingredientList
+
+    def getCheckedIngredients(self):
+        #TODO
+        ingredientList = []
+        print('TODOget checked ingredient')
+        pass
 
 
     def filterRecipe(self):
+        """
+
+        TODO: lancer immediatement ou attendre un peu ? autre process ?
+
+        filter recipe : recuperer les differentes cles de filtre
+        str type de plat entree/plat...
+        bool filtre par ingredient
+        str filtre
+        autres filtre / flags
+
+        appeller fn filtre ds recette
+        recup items filtres
+
+        apply result: pour chaque item show / hide par attr
+
+        """
+        """
         def retrieveIngredientList(choice):
             ingredientList = []
             for name, widget in self.qtIngredientWidget.ingredientWidgetList:
@@ -1853,8 +1904,40 @@ class MainWindow(QtWidgets.QMainWindow):
             print('kept ingredient : ', kept)
 
         #filter by recipe filter text TODO
+        
+        """
 
+        def getIngredients():
+            filterIngredientBy = self.qtRecipeWidget.qtFilterByIngredientCombo.currentIndex()
+            if filterIngredientBy == 0:  #SelectedIngredients or visible if no selection (managed inside getSelection)
+                return self.getSelectedIngredients()
+            if filterIngredientBy == 1:  #Visible Ingredients
+                return self.getVisibleIngredients()
+            else:  # Checked Ingredients
+                return self.getCheckedIngredients()
 
+        def getFilters():
+            filters = {}
+            filters['recipeType'] = self.qtRecipeWidget.qtRecipeGroupBox.currentIndex()
+            filters['recipeMatchName'] = self.qtRecipeWidget.qtRecipeFilter.text()
+            filters['doFilterIngredients'] = self.qtRecipeWidget.qtFilterByIngredientCheckBox.checkState() == QtCore.Qt.CheckState.Checked
+            filters['ingredients'] = getIngredients()
+            return filters
+
+        def setQtHidden(qtItems, vis):
+            for qtitem in qtItems:
+                qtitem.setHidden(vis)
+
+        filters = getFilters()
+        print(filters)
+        self.recipeDb.filterRecipe2(filters)
+
+        for recipeObj in self.recipeDb.recipeList:
+            if recipeObj.searches.result == 1:
+                setQtHidden(recipeObj.qtitems, False)
+            else:
+                setQtHidden(recipeObj.qtitems, True)
+        """
 
         #apply results
         filtered = [(x, x in kept) for x in self.recipeDb.recipeList]
@@ -1876,18 +1959,31 @@ class MainWindow(QtWidgets.QMainWindow):
                     vis = True
                     break
             qtcategory.setHidden(not vis)
+        
+        """
 
 test = False
 window = True
-AppWindowsId = 'Recette'
-ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(AppWindowsId)
-sys.argv += ['-platform', 'windows:darkmode=2']
+import platform
+platformName = platform.system()
+if platformName == 'Windows':
+    AppWindowsId = 'Recette'
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(AppWindowsId)
+    sys.argv += ['-platform', 'windows:darkmode=2']
+elif platformName == 'Linux':
+    pass
+elif platformName == 'android':
+    pass
 app = QtWidgets.QApplication(sys.argv)
+
 app.setStyle('Fusion')
-libPath = 'E:/Scripts/Python/Recette/recette liste.ods'
-# libPath = 'D:/Python/recette liste.ods'
-libPath = 'E:/Scripts/Python/Recette/recipe_database.db'
-# libPath = ''
+if platformName == 'Windows':
+    libPath = 'E:/Scripts/Python/Recette/recette liste.ods'
+    # libPath = 'D:/Python/recette liste.ods'
+    libPath = 'E:/Scripts/Python/Recette/recipe_database.db'
+    # libPath = ''
+else:
+    libPath = '/media/adeath/Work/Scripts/Python/Recette/recipe_database.db'
 if test is True:
     # print(sys.argv)
     window = RecipeWindowContent(None, None, None)

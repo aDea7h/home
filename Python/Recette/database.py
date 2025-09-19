@@ -240,7 +240,7 @@ class DB:
             self.connexion.close()
             self.connection = None
             self.cursor = None
-        print('--> DB : Commit Done')
+        print(f'--> DB : Commit Done in {self.pathToRecipeDb}')
 
     def executeQuery(self, sqlQuery, commit=True):
         def doExecute(sqlQuery):
@@ -263,18 +263,8 @@ class DB:
         if commit is True:
             self.commit()
 
-    ###############
-    # Others
-    ###############
-
-
-    # def convertIngredientObjToId(self, obj):
-    #     #ingredientsId = [ingredient.id for ingredient in obj.ingredients]
-    #     ingredientList = []
-    #     for ingredient in obj.ingredients:
-    #         ingredientList.append('{}.{}'.format(type(ingredient).__name__, ingredient.id))
-    #         print('converting ingredient {}, {} to {}.{}'.format(ingredient, ingredientName, type(ingredient).__name__, ingredient.id))
-    #     return str(ingredientsId)
+    def backup(self):
+        incrementalBackup(self.pathToRecipeDb)
 
 
     ###############
@@ -298,7 +288,26 @@ class DB:
             season text,
             local integer
             )"""
-        sqlQuery2 = """CREATE TABLE stocks(
+        sqlQuery2 = """CREATE TABLE recipes(
+            name text,
+            category_id text,
+            type text,
+            match_name text,
+            origin text,
+            tags text,
+            ingredients text,
+            before_recipe text,
+            recipe text,
+            suggestion text,
+            notes text,
+            files text,
+            cooking_time real,
+            preparation_time real,
+            is_best_reheated integer,
+            rating integer,
+            is_wip integer
+            )"""
+        sqlQuery3 = """CREATE TABLE stocks(
             name text,
             category text,
             servingsQuantity real,
@@ -308,15 +317,19 @@ class DB:
             dateIsExpirationDate integer,
             ingredients text
             )"""
-        sqlQuery3 = """CREATE TABLE goals(
+        sqlQuery4 = """CREATE TABLE goals(
                 name text,
                 nbr text,
                 note text
                 )"""
-        sqlQuery4 = """CREATE TABLE notes(
+        sqlQuery5 = """CREATE TABLE notes(
                     name text
                     )"""
-        self.executeQuery([sqlQuery, sqlQuery2, sqlQuery3, sqlQuery4], False)
+        sqlQuery6 = """CREATE TABLE config(
+                            key text,
+                            value text
+                            )"""
+        self.executeQuery([sqlQuery, sqlQuery2, sqlQuery3, sqlQuery4, sqlQuery5, sqlQuery6], False)
         # self.executeQuery(sqlQuery, False)
         self.commit(close=False)
 

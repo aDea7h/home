@@ -42,9 +42,9 @@ def splitValueToList(value):
     if value is None:
         return []
     if isinstance(value, int) is True:
-        return[value]
+        return [value]
     if isinstance(value, list)  is True:
-        return[value]
+        return value
     if value.startswith('[') and value.endswith(']'):
         return eval(value)
     return [x.strip() for x in value.split(',')]
@@ -134,9 +134,6 @@ def convertIngredientIdToObj(path, ingredients): #TODO
         ingredientList.append(obj)
     return ingredientList
 
-def convertObjToIngredientId(obj): # Todo
-    return
-
 def checkFilePath(path):
     if os.path.exists(path) is False:
         raise Exception('File Does not exists : {}'.format(path))
@@ -187,9 +184,9 @@ def copyIngredientObj(ingredientObjTmp, ingredientObj):
     return ingredientObjTmp
 
 def copyRecipeObj(recipeObj):
-    # print('copy in ref : ', recipeObj.__dict__)
+    print('copy in ref : ', recipeObj.__dict__)
     recipeObjTmp = Recipe({'name': recipeObj.name}, False)
-    # print('copy in init : ', recipeObjTmp.__dict__)
+    print('copy in init : ', recipeObjTmp.__dict__)
     for attr in recipeObjTmp.__dict__.keys():
         if attr in ['qtItem', 'ingredients']:
             continue
@@ -199,7 +196,7 @@ def copyRecipeObj(recipeObj):
         ingredientObjTmp = Ingredient({'name': ingredient.name}, False)
         ingredientList.append(copyIngredientObj(ingredientObjTmp, ingredient))
     recipeObjTmp.ingredients = ingredientList
-    # print('copy out : ', recipeObjTmp.__dict__)
+    print('copy out : ', recipeObjTmp.__dict__)
     return recipeObjTmp
 
 class Preferences:
@@ -262,6 +259,16 @@ class Ingredient:
             self.detectMatchNames(self.fullCreation)
 
     def detectMatchNames(self, processCategory=True):
+        """clean"""
+        mn = []
+        for item in self.match_name:
+            item = item.strip()
+            if item == '' or len(item) == 1:
+                continue
+            mn.append(item)
+        self.match_name = mn
+
+        """add"""
         if self.category is not None and processCategory is True:
             cat = [x for x in self.category]
         else:
@@ -275,11 +282,13 @@ class Ingredient:
         else:
             match = []
         for item in [self.name] + cat + fam + match:
+            item = item.strip()
+            if item == '':
+                continue
             if item not in self.match_name:
                 self.match_name.append(item)
             if unidecode(item).strip() not in self.match_name:
                 self.match_name.append(unidecode(item).strip())
-        # print(self.match_name)
 
     def conformAttrs(self, attrs):
         attrs = removeNans(attrs)
@@ -303,6 +312,7 @@ class IngredientList:
         self.path = path
         self.ingredientList = []
         # self.ingredientDic = {}
+        self.db = None
         self.ingredientTree = {}
         self.Search = tools.Search(flag='unidecode')
         if path[-4:] == '.ods':
@@ -457,9 +467,42 @@ class IngredientList:
     def exportDataToFile(self, odsPath): #TODO
         return
 
+    def exportDatasToDb(self, datas):
+        # print(f'\n\n-->> export inputs: {datas}')
+        ingredientObj = Ingredient(datas, True)
+        ingredientObjTmp = Ingredient({'name':ingredientObj.name})
+        ingredientObjTmp = copyIngredientObj(ingredientObjTmp, ingredientObj)
+        if self.db is None:
+            self.db = database.DB(self.path)
+        if ingredientObj.id in [None, -1]:
+            print('adding ingredient')
+            self.db.addToIngredient(ingredientObjTmp)
+        else:
+            print('editing ingredient')
+            self.db.editIngredient(ingredientObj)
+
+    def reprocessMatchNames(self):
+        self.db.backup()
+        self.db.backupDB = False
+        for ingredientObj in self.ingredientList:
+            # print(f'old matchname for {ingredientObj.name} : {ingredientObj.match_name}')
+            # l = copy.deepcopy(ingredientObj.match_name)
+            # d = []
+            ingredientObj.detectMatchNames()
+            # print(f'new matchname for {ingredientObj.name} : {ingredientObj.match_name}')
+            # for x in ingredientObj.match_name:
+            #     if x not in l:
+            #         d.append(x)
+            # print(d)
+            try:
+                self.exportDatasToDb(ingredientObj.__dict__)
+            except:
+                raise Exception('error while exporting object')
+        self.db.backupDB = True
+
 
 class Recipe:
-    def __init__(self, attrs={}, checkIngredient=True, ingredientList=[]):
+    def __init__(self, attrs={}, checkInit=True, ingredientList=[]):
         #recipe identity
         self.id = -1
         self.name = None
@@ -479,8 +522,8 @@ class Recipe:
         self.cooking_time = None
         self.preparation_time = None
         self.is_best_reheated = None
-        self.rating = None
-        self.is_wip = None
+        self.rating = -1
+        self.is_wip = True
 
         #calculated attribs
         self.category = None  # parent item label (is a list)
@@ -510,14 +553,15 @@ class Recipe:
             self.type = ["Dish"]
         if self.match_name is None:
             self.match_name = []
-        if checkIngredient is True:
+        if checkInit is True:
             self.conformRecipeIngredients(ingredientList)
+            self.computeAttrs()
         self.detectMatchNames()
         print("check ingredients for vegan: {}".format(self.ingredients))
         print(self.ingredients)
         # self.is_vegan = is_vegan(self)
         # self.computeRating()
-        self.computeAttrs()
+
 
 
     def computeRating(self):
@@ -543,9 +587,10 @@ class Recipe:
         self.is_vegan = isVegan(self)
         self.computeRating()
         self.special_ingredient = self.needSpecialIngredient()
-        self.total_time = self.cooking_time + self.preparation_time
+        if self.cooking_time and self.preparation_time:
+            self.total_time = self.cooking_time + self.preparation_time
         speed = None
-        if self.total_time != 0:
+        if self.total_time not in [0, None]:
             if self.preparation_time <= prefs.recipe_is_fast_time_max:
                 speed = 'fast'
             elif self.preparation_time >= prefs.recipe_slow_preparation_time_min:
@@ -642,6 +687,16 @@ class Recipe:
             idx += 1
 
     def detectMatchNames(self):
+        """clean"""
+        mn = []
+        for item in self.match_name:
+            item = item.strip()
+            if item == '' or len(item) == 1:
+                continue
+            mn.append(item)
+        self.match_name = mn
+
+        """add"""
         if self.category is not None:
             cat = [x for x in self.category]
         else:
@@ -655,6 +710,7 @@ class Recipe:
         else:
             match = []
         for item in [self.name] + cat + type + match:
+            item = item.strip()
             if item not in self.match_name:
                 self.match_name.append(item)
             if unidecode(item).strip() not in self.match_name:
@@ -671,10 +727,12 @@ class RecipeList:
     def __init__(self, path='E:/Scripts/Python/Recette/recette liste.ods', checkIngredient=True, ingredientList=[]):
         self.path = path
         self.recipeList = []
+        self.db = None
         self.recipeTree = {}
         self.checkIngredient = checkIngredient
         self.ingredientList = ingredientList
         self.Search = tools.Search(flag='unidecode')
+        self.recipeTypes = ['All', 'Starter', 'Dish', 'Deserts', 'Sauce']
         if self.checkIngredient is True and self.ingredientList is []:
             self.ingredientList = IngredientList().ingredientList
         if path in ['', None]:
@@ -726,19 +784,21 @@ class RecipeList:
 
         return recipeList
 
-    def readOds(self, path=None):
+    def readOds(self, path=None, check=None):
         if path is None:
             path = self.path
         if os.path.exists(path) is False:
             raise Exception('File not found')
         data = pandas.read_excel(path, engine='odf', sheet_name="Recettes")
         recipeList = []
+        if check is None:
+            check = self.checkIngredient
         for i in range(data.index.stop):
             attrs = {}
             for col in data.columns:
                 attrs[col] = data.at[i, col]
 
-            recipeObj = Recipe(attrs, self.checkIngredient, self.ingredientList)
+            recipeObj = Recipe(attrs, check, self.ingredientList)
             recipeList.append(recipeObj)
 
         return recipeList
@@ -773,15 +833,17 @@ class RecipeList:
         print("==> importing recipe to db")
         print(self.path, odsPath)
         for recipeObj in recipeList:
-            print(recipeObj.name)
+            print(f'--->> importing recipe : {recipeObj.name} : {recipeObj.__dict__}')
             exportedRecipeObj = copy.deepcopy(recipeObj)
-            exportedRecipeObj = convertObjToIngredientId(exportedRecipeObj)
+            print(exportedRecipeObj)
             # check existence
             # if ingredientObj.name in self.ingredientDic.keys():
             if exportedRecipeObj.name in [x.name for x in self.recipeList]:
                 # update # TODO confirmation and display delta
+                print("edit recipe")
                 db.editRecipe(exportedRecipeObj)
             else:  # add
+                print('add recipe')
                 db.addToRecipe(exportedRecipeObj)
 
         db.backupDB = True
@@ -789,13 +851,15 @@ class RecipeList:
     def exportDatasToDb(self, datas):
         recipeObj = Recipe(datas, True, self.ingredientList)
         recipeObjTmp = copyRecipeObj(recipeObj)
-        self.db = database.DB(self.path)
-        if recipeObj.id:
-            print('editing recipe')
-            self.db.editRecipe(recipeObjTmp)
-        else:
+        if self.db is None:
+            self.db = database.DB(self.path)
+        if recipeObj.id in [None, -1]:
             print('adding recipe')
             self.db.addToRecipe(recipeObjTmp)
+
+        else:
+            print('editing recipe')
+            self.db.editRecipe(recipeObjTmp)
         print("done")
         return recipeObj
 
@@ -822,6 +886,67 @@ class RecipeList:
             filterList.append((recipeObj, recipeMatch))
         print([(obj.name, recipeMatch) for obj, recipeMatch in filterList])
         return filterList
+
+    def filterRecipe2(self, filters):
+        """
+        filters['recipeType']
+        filters['recipeMatchName']
+        filters['doFilterIngredients']
+        filters['ingredients']
+        """
+        search = {}
+        if self.recipeTypes[filters['recipeType']] is not 'All':
+            search['type'] = [self.recipeTypes[filters['recipeType']], False, False]
+        else:
+            # search['type'] = [self.recipeTypes[1:], False, False]
+            pass
+        if filters['recipeMatchName'] != '':
+            search['match_name'] = [filters['recipeMatchName'], False, True]
+        else:
+            pass
+        # print(filters['doFilterIngredients'], filters['ingredients'])
+        # if filters['doFilterIngredients'] and filters['ingredients'] != []:
+        #     search['ingredients'] = [filters['ingredients'], False, True]
+        # else:
+        #     pass
+
+        print(f'-->> Recipe Search Launch : {search}')
+        #searches = {'attr': ['searchedStr', exclusionOverride, result], }
+        for recipeObj in self.recipeList:
+            if 'searches' not in recipeObj.__dict__.keys():
+                if search == {}:
+                    recipeObj.searches = self.Search.newSearchInObj(recipeObj, {})
+                    recipeObj.searches.result = 1
+                else:
+                    recipeObj.searches = self.Search.newSearchInObj(recipeObj, search)
+            else:
+                if search == {}:
+                    recipeObj.searches.result = 1
+                else:
+                    recipeObj.searches.search(search, True)
+            result = recipeObj.searches.result == 1
+            #ie : searches = {'attr': ['searchedStr', bool exclusionOverride, split, ('objAttrName')], ...}
+            print(f'recipe result: {recipeObj.searches} : {recipeObj.searches.result} // {recipeObj.searches.allSearches}')
+
+    def reprocessMatchNames(self):
+        self.db.backup()
+        self.db.backupDB = False
+        for recipeObj in self.recipeList:
+            print(f'old matchname for {recipeObj.name} : {recipeObj.match_name}')
+            l = copy.deepcopy(recipeObj.match_name)
+            d = []
+            recipeObj.detectMatchNames()
+            print(f'new matchname for {recipeObj.name} : {recipeObj.match_name}')
+            for x in recipeObj.match_name:
+                if x not in l:
+                    d.append(x)
+            print(d)
+            try:
+                self.exportDatasToDb(recipeObj.__dict__)
+                pass
+            except:
+                raise Exception('error while exporting object')
+        self.db.backupDB = True
 
 
 
@@ -982,6 +1107,10 @@ class Datas:
             if os.path.isfile(tmpPath):
                 return dbPath
             else:
+                db = database.DB(dbPath)
+                db.create_db()
+                if os.path.isfile(dbPath):
+                    return dbPath
                 raise FileNotFoundError(dbPath)
 
 

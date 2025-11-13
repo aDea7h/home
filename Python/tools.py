@@ -469,8 +469,8 @@ def searchText(pattern, text, flag=["unidecode", "ignoreCase"]):
         result = re.search(pattern, text)
     customPrint([pattern, text, result], 1)
     if result:
-        return True
-    return None
+        return True, result.span()
+    return None, None
 
 
 class SearchPart:
@@ -487,6 +487,7 @@ class SearchPart:
         None: pas de resultat
         """
         self.result = None  # [1 0 -1 None]
+        self.span = None
         self.searchedPart = searchedPart
         self.textStack = textStack
         self.exclusion = exclusion
@@ -495,7 +496,7 @@ class SearchPart:
     def update(self, force=False):
         if self.result is None or force is True:
             # print(f'-- textStack : {self.textStack}')
-            result = searchText(self.searchedPart, self.textStack)
+            result, self.span = searchText(self.searchedPart, self.textStack)
             # print(result, self.searchedPart, self.textStack)
             if result is True:
                 if self.exclusion is True:
@@ -504,6 +505,7 @@ class SearchPart:
                     self.result = 1
             else:
                 self.result = 0
+                self.span = None
         return result
 
 
@@ -566,7 +568,6 @@ class Search:
             self.splitPatternToParts()
             print(f'pattern split : {self.searchParts}')
             self.search()
-
 
         def conformStackToSearch(self):
             """
@@ -673,23 +674,75 @@ class Search:
             # effectuer la recherche pour chaque part sur la liste searchedStackList
             # annuler la recherche part suivante si exclusion match
             # un match positif valide le resultat vu que les exclusions ont deja ete faites (sort de la liste)
+            # un match positif ne doit pas tout valider les parts, car retourne des faux positifs sinon (['poi', 'e'] matcherait sur poivron)
             """
-            finalResult = None
-            for part in self.searchParts:
-                if finalResult is not None:
-                    break
-                print(f'-->> search launch with {part[0]} and {part[1]}')
-                for text in self.searchedStackList:
-                    print(f'-> search text: {text}' )
-                    searchPartObj = SearchPart(part[0], text, part[1])
-                    print(f'result : {searchPartObj.result}')
-                    if searchPartObj.result in [-1, 1]:
-                        finalResult = searchPartObj.result
-                        print(f'break search in stack {finalResult}')
+            def oldMethodFalsePositive():
+                finalResult = None
+                for part in self.searchParts:
+                    if finalResult is not None:
                         break
-            if finalResult is None:
-                finalResult = 0
+                    print(f'-->> search launch with {part[0]} and {part[1]}')
+                    for text in self.searchedStackList:
+                        print(f'-> search text: {text}' )
+                        searchPartObj = SearchPart(part[0], text, part[1])
+                        print(f'result : {searchPartObj.result}')
+                        if searchPartObj.result in [-1, 1]:
+                            finalResult = searchPartObj.result
+                            print(f'break search in stack {finalResult}')
+                            break
+                return finalResult
+
+            switchMethod = 'wip'
+            finalResult = None
+            if switchMethod == 'old':
+                result = oldMethodFalsePositive()
+            elif switchMethod == 'wip':
+                """
+                pour caque elem de liste
+                    Pour chaque part                
+                        faire la recherche
+                        stocker le resultat positif dans une liste
+                        skip  et recommencer a la part suivante avec l'index du premier match
+                        si match complet sur toutes les parts (premier match = break)
+                            return match
+                        else:
+                            recommencer en part 0 avec dernier index
+                            
+                    un match veut dire match de chaque part dans l ordre donc, si skip, dernier elem stocke de match identique pour toutes les parts
+                        
+                """
+
+                def searchSingleListItem(text):
+                    """
+                    chercher pour chaque item de la liste (en texte) chaque match
+                    un match d'une part lance la recherche suivante en offset du texte (peut seulement matcher apres le premier)
+                    """
+                    idxStartMatch = 0
+                    result = None
+                    for part in self.searchParts:
+                        print(f'--->> search launch with {part[0]} inside {text[idxStartMatch:]}')
+                        searchPartObj = SearchPart(part[0], text[idxStartMatch:], part[1])
+                        print(f'---> result : {searchPartObj.result}')
+                        if searchPartObj.result == -1:
+                            return -1
+                        elif searchPartObj.result == 1:
+                            result = 1
+                            idxStartMatch += searchPartObj.span[1]
+                        else:  # no match for this part -> break
+                            return 0
+                    # final result is the same for all match because no result = 0 (already returned) and part[1] (aka exclusion) is static and identic for all parts
+                    return result
+
+
+                for text in self.searchedStackList: # pour chaque item de list a matcher
+                    print(f'------> search in stack item: {text}')
+                    finalResult = searchSingleListItem(text)
+                    if finalResult != 0: # premier resultat break et store car exclusions en premier
+                        break
+                if finalResult is None:
+                    finalResult = 0
             self.result = finalResult
+            print(f'------> END SearchGroupParts result: {self.result}')
 
 
     class SearchInObj:
@@ -729,7 +782,7 @@ class Search:
             self.search(searches)
 
         def splitSearchPatternToGroups(self, searchPattern):
-            print('split', searchPattern)
+            print('--> split input', searchPattern)
             if isinstance(searchPattern, list) is True:
                 if isinstance(searchPattern[0], str) is True:
                     searchGroups = [group.strip() for group in searchPattern]
@@ -738,11 +791,12 @@ class Search:
             else: #string
                 searchGroups = searchPattern.split(self.outer.splitGroups)
                 searchGroups = [group.strip() for group in searchGroups]
-            print('splitted:', searchGroups)
+            print('--> split output:', searchGroups)
             return searchGroups
 
         def searchLinearExclusion(self, searches):
             """
+            searches = {'attrName':['searchPattern "poi e, poti"', exclusion, split], 'attrName2':[...]}
             ajouter / maj des recherches deja effectuees
             update des resultats stockes dans allsearches
             Ne pas updater l ordre de recherche > affecte le resultat (linear parent search > child search > subchild, add or multiply)
@@ -763,7 +817,7 @@ class Search:
                 # ie: match_name : 'poi on, roti' sera split en ['poi on', 'roti'] le lazywildcard viendra ensuite
 
                 searchPattern, exclusion, split = searches[attrSearch]
-                print(f'searchPattern, exclusion, split {searchPattern}, {exclusion}, {split}')
+                print(f'searchPattern: {searchPattern}, exclusion: {exclusion}, split: {split}')
                 if split is True:
                     searchGroups = self.splitSearchPatternToGroups(searchPattern)
                 else:
@@ -781,13 +835,13 @@ class Search:
                             resultObj = self.outer.SearchGroupParts(group, self.obj.__dict__[attrSearch], self.outer, split)
                             self.allSearches[groupSearchName] = [group, exclusion, split, resultObj]
                     else:
-                        print(f'new search: {group} : obj.{attrSearch} = {self.obj.__dict__[attrSearch]}')
+                        print(f'------>> New Search: {group} : obj.{attrSearch} = {self.obj.__dict__[attrSearch]}')
                         resultObj = self.outer.SearchGroupParts(group, self.obj.__dict__[attrSearch], self.outer, split)
                         # resultObj = self.outer.SearchGroupParts(self.obj.__dict__[attrSearch], group, self.outer, split)
                         self.allSearches[groupSearchName] = [group, exclusion, split, resultObj]
                     groupResults.append(resultObj.result)
                 result = computePatternResult(groupResults)
-                print(f'search results: {group} : {result}')
+                print(f'-->> Search results: {group} : {result}')
                 if result == -1:
                     """first exclusion on item, cancels all other researches"""
                     break

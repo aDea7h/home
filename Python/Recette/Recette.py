@@ -199,6 +199,12 @@ def copyRecipeObj(recipeObj):
     print('copy out : ', recipeObjTmp.__dict__)
     return recipeObjTmp
 
+
+class Units:
+    def __init__(self):
+        self.name = 'g'
+        self.nameList = ['g', 'kg', 'L', 'cL', 'u']
+
 class Preferences:
     def __init__(self, libPath):
         global prefs
@@ -246,12 +252,15 @@ class Ingredient:
         self.protein = None
         self.always_available = None
         self.special = None
+        self.is_bought = False
+        self.aisle = None
         self.fullCreation = fullCreation
 
         attrs = self.conformAttrs(attrs)
 
         self.visible = True  # not stored in Db usefull ?
         self.size = 0  # not stored in Db (used by recipe for ingredient quantity)
+        self.unit = Units()
         self.qtItem = []  #not stored in Db
         self.__dict__.update(attrs)
 
@@ -443,8 +452,31 @@ class IngredientList:
 
     def filterIngredients(self, filterText):
         filterText = filterText.strip()
-        matchList = self.Search.matchEachItemToWholeSearch(self.ingredientList, filterText, True, 'match_name')
-        print([(obj.name, match) for obj, match in matchList])
+        method = 1
+        if method == 0:
+            matchList = self.Search.matchEachItemToWholeSearch(self.ingredientList, filterText, True, 'match_name')
+        elif method == 1:
+            matchList = []
+            search = {'match_name': [filterText, False, True]}
+            print(f'-->> Ingredient Search Launch : {search}')
+            # searches = {'attr': ['searchedStr', exclusionOverride, result], }
+            for ingredientObj in self.ingredientList:
+                if 'searches' not in ingredientObj.__dict__.keys():
+                    if search == {}:
+                        ingredientObj.searches = self.Search.newSearchInObj(ingredientObj, {})
+                        ingredientObj.searches.result = 1
+                    else:
+                        ingredientObj.searches = self.Search.newSearchInObj(ingredientObj, search)
+                else:
+                    if search == {}:
+                        ingredientObj.searches.result = 1
+                    else:
+                        ingredientObj.searches.search(search, True)
+                result = ingredientObj.searches.result == 1
+                # ie : searches = {'attr': ['searchedStr', bool exclusionOverride, split, ('objAttrName')], ...}
+                print(f'------>> recipe result: {ingredientObj.searches} : {ingredientObj.searches.result} // {ingredientObj.searches.allSearches}')
+                matchList.append([ingredientObj, result])
+
         return matchList
 
     def importDataFromFile(self, odsPath):
@@ -524,6 +556,9 @@ class Recipe:
         self.is_best_reheated = None
         self.rating = -1
         self.is_wip = True
+        self.is_bought = False
+        self.is_leftover = False
+        self.is_preprepared = False
 
         #calculated attribs
         self.category = None  # parent item label (is a list)
@@ -732,7 +767,7 @@ class RecipeList:
         self.checkIngredient = checkIngredient
         self.ingredientList = ingredientList
         self.Search = tools.Search(flag='unidecode')
-        self.recipeTypes = ['All', 'Starter', 'Dish', 'Deserts', 'Sauce']
+        self.recipeTypes = ['All', 'Starter', 'Dish', 'Dessert', 'Sauce', 'Picnic', 'Soup']
         if self.checkIngredient is True and self.ingredientList is []:
             self.ingredientList = IngredientList().ingredientList
         if path in ['', None]:
@@ -1077,7 +1112,7 @@ class Day:
         self.qtItems = []
 
 class DayList:
-    def __init__(self, start=None, length=9):
+    def __init__(self, start=None, length=17):
         if start is None:
             start = time.time()
 
@@ -1085,11 +1120,16 @@ class DayList:
         dayRange = pandas.date_range(self.startDay, periods=length)
 
         self.dayList = []
+        idx = 0
         for day in dayRange:
+            # if idx == 0:
+            #     idx += 1
+            #     continue
             dayName = day.strftime("%A : %d %b")
             dayNum = day.strftime("%Y.%m.%d")
             dayObj = Day(dayName, dayNum)
             self.dayList.append(dayObj)
+            idx += 1
 
 
 class Datas:

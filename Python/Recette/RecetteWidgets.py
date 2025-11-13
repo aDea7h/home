@@ -1,6 +1,8 @@
+# from email.contentmanager import maintype
+
 from PySide6 import QtCore, QtGui, QtWidgets
 from TextEditorWidget import TextEdit
-
+from Recette import Units
 
 class GenericWidget(QtWidgets.QWidget):
     def __init__(self, ui):
@@ -98,12 +100,17 @@ class IngredientWidget(QtWidgets.QWidget):
 
 
 class RecipeWidget(QtWidgets.QWidget):
-    def __init__(self, ui, *args, **kwargs):
+    def __init__(self, outer, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.ui = ui
+        self.outer = outer
+        self.ui = self.outer.ui
         self.layout = QtWidgets.QVBoxLayout()
         self.setLayout(self.layout)
 
+        self.generateUi()
+        self.setConnections()
+
+    def generateUi(self):
         # ----->> Ui Elements
         self.qtRecipeFilter = QtWidgets.QLineEdit()
         self.qtFilterByIngredientCheckBox = QtWidgets.QCheckBox("Filter Recipe by Ingredients")
@@ -138,22 +145,30 @@ class RecipeWidget(QtWidgets.QWidget):
         self.qtDishGroupPage = QtWidgets.QWidget()
         self.qtDessertGroupPage = QtWidgets.QWidget()
         self.qtSauceGroupPage = QtWidgets.QWidget()
+        self.qtPicnicGroupPage = QtWidgets.QWidget()
+        self.qtSoupGroupPage = QtWidgets.QWidget()
         self.qtRecipeGroupBox.addTab(self.qtAllGroupPage, "All")
-        self.qtRecipeGroupBox.addTab(self.qtStarterGroupPage, "Starters")
-        self.qtRecipeGroupBox.addTab(self.qtDishGroupPage, "Dishes")
-        self.qtRecipeGroupBox.addTab(self.qtDessertGroupPage, "Desserts")
-        self.qtRecipeGroupBox.addTab(self.qtSauceGroupPage, "Sauces")
+        self.qtRecipeGroupBox.addTab(self.qtStarterGroupPage, "Starter")
+        self.qtRecipeGroupBox.addTab(self.qtDishGroupPage, "Dish")
+        self.qtRecipeGroupBox.addTab(self.qtDessertGroupPage, "Dessert")
+        self.qtRecipeGroupBox.addTab(self.qtSauceGroupPage, "Sauce")
+        self.qtRecipeGroupBox.addTab(self.qtPicnicGroupPage, "Picnic")
+        self.qtRecipeGroupBox.addTab(self.qtSoupGroupPage, "Soup")
 
         self.qtAllGroupPageLayout = QtWidgets.QVBoxLayout()
         self.qtStarterGroupPageLayout = QtWidgets.QVBoxLayout()
         self.qtDishGroupPageLayout = QtWidgets.QVBoxLayout()
         self.qtDessertGroupPageLayout = QtWidgets.QVBoxLayout()
         self.qtSauceGroupPageLayout = QtWidgets.QVBoxLayout()
+        self.qtPicnicGroupPageLayout = QtWidgets.QVBoxLayout()
+        self.qtSoupGroupPageLayout = QtWidgets.QVBoxLayout()
         self.qtAllGroupPage.setLayout(self.qtAllGroupPageLayout)
         self.qtStarterGroupPage.setLayout(self.qtStarterGroupPageLayout)
         self.qtDishGroupPage.setLayout(self.qtDishGroupPageLayout)
         self.qtDessertGroupPage.setLayout(self.qtDessertGroupPageLayout)
         self.qtSauceGroupPage.setLayout(self.qtSauceGroupPageLayout)
+        self.qtPicnicGroupPage.setLayout(self.qtPicnicGroupPageLayout)
+        self.qtSoupGroupPage.setLayout(self.qtSoupGroupPageLayout)
         #layout
         self.qtLabelRecipes = QtWidgets.QLabel('Recipes')
         self.layout.addWidget(self.qtLabelRecipes)
@@ -163,6 +178,16 @@ class RecipeWidget(QtWidgets.QWidget):
         self.layout.addWidget(self.qtFilterByIngredientCombo)
         self.layout.addWidget(self.qtRecipeGroupBox)
         self.qtAllGroupPageLayout.addWidget(self.qtTreeRecipe)
+
+    def setConnections(self):
+        self.qtRecipeGroupBox.currentChanged.connect(self.switchTab)
+
+    def switchTab(self):
+        idx = self.qtRecipeGroupBox.currentIndex()
+        widget = self.qtRecipeGroupBox.widget(idx)
+        layout = widget.layout()
+        layout.addWidget(self.qtTreeRecipe)
+        self.outer.filterRecipe()
 
 
 class StockWidget(QtWidgets.QWidget):
@@ -231,8 +256,9 @@ class MenuWidget(QtWidgets.QWidget):
         self.qtMenuButtonDown = QtWidgets.QPushButton('Down')
 
         # ----->> Init Ui Elements
-        self.qtTreeMenu.setColumnCount(3)
-        self.qtTreeMenu.setHeaderItem(QtWidgets.QTreeWidgetItem(["Day", "Menu", "Notes"]))
+        self.qtTreeMenu.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.qtTreeMenu.setColumnCount(2)
+        self.qtTreeMenu.setHeaderItem(QtWidgets.QTreeWidgetItem(["Day", "Menu"]))
         self.qtTreeMenu.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.qtTreeMenu.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding)
 
@@ -255,35 +281,116 @@ class MenuWidget(QtWidgets.QWidget):
 
 
 class GroceriesWidget(QtWidgets.QWidget):
-    def __init__(self, ui):
+    def __init__(self, outer):
         super().__init__()
-        self.ui = ui
-        self.layout = QtWidgets.QVBoxLayout()
+        self.outer = outer
+        self.ui = self.outer.ui
+        self.aislesDefault = {
+            'Special': [],
+            'Meat': [],
+            'Vegetable': [],
+            'Other': [],
+            'Always Available - to check': [],
+        }
+        self.aisles = {}
+        self.reinitAisles()
+
+        self.aislesIcons = {
+            'Special': self.ui['icons']['warning'],
+            'Meat': self.ui['icons']['meat'],
+            'Vegetable': self.ui['icons']['vegetable'],
+            'Always Available - to check': self.ui['icons']['ok'],
+        }
+        self.groceriesExport = ''
+        self.layout = QtWidgets.QGridLayout()
         self.setLayout(self.layout)
 
         # ----->> Ui Elements
         self.qtGroceriesTree = QtWidgets.QTreeWidget()
-        qtSpecialItem = QtWidgets.QTreeWidgetItem(['Special'])
-        qtMeatItem = QtWidgets.QTreeWidgetItem(['Meat'])
-        qtLegumeItem = QtWidgets.QTreeWidgetItem(['Vegetable'])
-        qtAlwaysAvailableItem = QtWidgets.QTreeWidgetItem(['Always available - to check'])
+        self.qtGroceriesRefreshButton = QtWidgets.QPushButton('Refresh Groceries')
+        self.qtGroceriesCopyButton = QtWidgets.QPushButton('Copy to Clipboard')
 
         # ----->> Init Ui Elements
         self.qtGroceriesTree.setHeaderItem(QtWidgets.QTreeWidgetItem(['Ingredients :']))
-        qtSpecialItem.setIcon(0, self.ui['icons']['warning'])
-        qtMeatItem.setIcon(0, self.ui['icons']['meat'])
-        qtLegumeItem.setIcon(0, self.ui['icons']['vegetable'])
-        qtAlwaysAvailableItem.setIcon(0, self.ui['icons']['ok'])
-        topLevel = [qtSpecialItem, qtMeatItem, qtLegumeItem, QtWidgets.QTreeWidgetItem(['Other']),
-                    qtAlwaysAvailableItem]
-        self.qtGroceriesTree.addTopLevelItems(topLevel)
         self.qtGroceriesTree.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
                                            QtWidgets.QSizePolicy.Policy.Expanding)
 
         # ----->> Set Layout
         self.qtLabelGroceriesList = QtWidgets.QLabel('Grocery List')
-        self.layout.addWidget(self.qtLabelGroceriesList)
-        self.layout.addWidget(self.qtGroceriesTree)
+        self.layout.addWidget(self.qtLabelGroceriesList, 0, 0, 1, 2)
+        self.layout.addWidget(self.qtGroceriesTree, 1, 0, 1, 2)
+        self.layout.addWidget(self.qtGroceriesRefreshButton, 2, 0, 1, 1)
+        self.layout.addWidget(self.qtGroceriesCopyButton, 2, 1, 1, 1)
+
+        self.setConnexions()
+
+    def reinitAisles(self):
+        self.aisles = {}
+        for key in self.aislesDefault:
+            self.aisles[key] = []
+
+    def setConnexions(self):
+        self.qtGroceriesCopyButton.clicked.connect(lambda: self.outer.copyToClipboard(self.groceriesExport))
+        self.qtGroceriesRefreshButton.clicked.connect(self.outer.setGroceriesFromMenu)
+
+    # def copyToClipboard(self):
+    #     clipboard = QtGui.QGuiApplication.clipboard()
+    #     clipboard.setText(self.groceriesExport)
+
+    def splitIngredientsToAisle(self, ingredientList):
+        for ingredient in ingredientList:
+            if ingredient.special is True:
+                self.aisles['Special'].append(ingredient)
+            elif ingredient.always_available is True:
+                self.aisles['Always Available - to check'].append(ingredient)
+            elif ingredient.aisle is not None:
+                if ingredient.aisle in self.aisles.keys():
+                    self.aisles[ingredient.aisle].append(ingredient)
+                else:
+                    self.aisles[ingredient.aisle] = [ingredient]
+            elif 'meat' in ingredient.family:
+                self.aisles['Meat'].append(ingredient)
+            elif 'vegetable' in ingredient.family or 'starch' in ingredient.family:
+                self.aisles['Vegetable'].append(ingredient)
+            else:
+                self.aisles['Other'].append(ingredient)
+        print(self.aisles)
+
+    def createAisleItem(self, aisle):
+        qtAisleItem = QtWidgets.QTreeWidgetItem([aisle])
+        if aisle in self.aislesIcons:
+            qtAisleItem.setIcon(0, self.aislesIcons[aisle])
+        return qtAisleItem
+
+    def createIngredientItem(self, ingredient, qtAisleItem):
+        ingredientLabel = f'{ingredient.name} : {ingredient.size}{ingredient.unit}'
+        qtIngredientItem = QtWidgets.QTreeWidgetItem(qtAisleItem, [ingredientLabel])
+        ingredientExport = f'  - {ingredientLabel}\n'
+        return ingredientExport
+
+    def exportAisle(self, aisle):
+        return f'\n\n####################\n# {aisle}\n####################\n'
+
+    def setGroceries(self, ingredientList):
+        topLevel = []
+        self.qtGroceriesTree.clear()
+        self.groceriesExport = ''
+        self.reinitAisles()
+
+        self.splitIngredientsToAisle(ingredientList)
+        for aisle in self.aisles:
+            ingredientList = self.aisles[aisle]
+            qtAisleItem = self.createAisleItem(aisle)
+            topLevel.append(qtAisleItem)
+            self.groceriesExport += self.exportAisle(aisle)
+            for ingredient in ingredientList:
+                self.groceriesExport += self.createIngredientItem(ingredient, qtAisleItem)
+            qtAisleItem.sortChildren(0, QtCore.Qt.SortOrder.AscendingOrder)
+            # qtAisleItem.setExpanded(True)
+
+        self.qtGroceriesTree.addTopLevelItems(topLevel)
+        self.qtGroceriesTree.expandAll()
+        self.outer.copyToClipboard(self.groceriesExport)
 
 
 class RecipeContentWidget(QtWidgets.QWidget): #QDialog
@@ -518,4 +625,179 @@ class RecipeContentWidget(QtWidgets.QWidget): #QDialog
         # Validation Accept / Reject Buttons
         self.qtButtonBox.setEnabled(enabled)
         # self.qtDisplayButtonsWidget.setEnabled(enabled)
+
+
+class MenuTreeWidgetContent(QtWidgets.QTreeWidgetItem):
+    def __init__(self, outer, name, obj):
+        super().__init__()
+        self.outer = outer
+        self.name = name
+        self.obj = obj
+        self.setData(1, QtCore.Qt.ItemDataRole.UserRole, obj)
+        self.setData(0, QtCore.Qt.ItemDataRole.UserRole, 'RecipeItem')
+
+        styleSheetShopping = """QCheckBox::indicator:unchecked {image: url(./icons/shoppingCart.png);height: 15px;width: 15px;}
+        QCheckBox::indicator:checked {image: url(./icons/shoppingCartFade.png);height: 15px;width: 15px;}"""
+        styleSheetPreCooked = """QCheckBox::indicator:unchecked {image: url(./icons/precooked.png);height: 15px;width: 15px;}
+        QCheckBox::indicator:checked {image: url(./icons/precookedFade.png);height: 15px;width: 15px;}"""
+        styleSheetLeftover = """QCheckBox::indicator:unchecked {image: url(./icons/leftover2.png);height: 15px;width: 15px;}
+        QCheckBox::indicator:checked {image: url(./icons/leftover2Fade.png);height: 15px;width: 15px;}"""
+
+        self.styles = {
+            'is_bought': styleSheetShopping,
+            'is_preCooked': styleSheetPreCooked,
+            'is_leftover': styleSheetLeftover,
+        }
+
+
+        self.qtIngredientTreeWidgetItem = QtWidgets.QTreeWidgetItem(self, ['', ''])
+        self.qtIngredientTreeWidgetItem.setData(0, QtCore.Qt.ItemDataRole.UserRole, 'IngredientItem')
+        self.qtRecipeNameWidget = self.createRecipeNameWidget(name)
+        self.qtIngredientWidget = QtWidgets.QWidget()
+        self.ingredientLayout = QtWidgets.QVBoxLayout()
+        self.ingredientLayout.setSpacing(0)
+        self.ingredientLayout.setContentsMargins(33, 0, 11, 11)
+        self.qtIngredientWidget.setLayout(self.ingredientLayout)
+        self.refreshIngredientsList()
+        self.applyObjData()
+        self.setExpanded(True)
+        self.qtIngredientTreeWidgetItem.setExpanded(True)
+
+
+    def createRecipeNameWidget(self, name):
+        widget = QtWidgets.QGroupBox()
+        layout = QtWidgets.QVBoxLayout()
+        # layout.setSpacing(5)
+        layout.setContentsMargins(0, 0, 0, 0)
+        widget.setLayout(layout)
+
+        subTitleWidget = QtWidgets.QWidget()
+        subTitleWidgetLayout = QtWidgets.QHBoxLayout()
+        subTitleWidgetLayout.setSpacing(5)
+        subTitleWidgetLayout.setContentsMargins(11, 7, 11, 7)
+        subTitleWidget.setLayout(subTitleWidgetLayout)
+        layout.addWidget(subTitleWidget)
+
+        self.qtBought = QtWidgets.QCheckBox()
+        # self.qtBought.setIcon(self.outer.ui['icons']['shoppingCartFade'])
+        # styleSheet = """QCheckBox::indicator:unchecked {image: url(./icons/shoppingCart.png);height: 15px;width: 15px;}
+        # QCheckBox::indicator:checked {image: url(./icons/shoppingCartFade.png);height: 15px;width: 15px;}"""
+
+        self.qtBought.setStyleSheet(self.styles['is_bought'])
+        self.qtBought.setToolTip('is already bought')
+        self.qtBought.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        subTitleWidgetLayout.addWidget(self.qtBought)
+
+        nameWidget = QtWidgets.QLabel(name)
+        nameWidget.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        subTitleWidgetLayout.addWidget(nameWidget)
+
+        self.qtLeftover = QtWidgets.QCheckBox()
+        self.qtLeftover.setToolTip('is some left over')
+        self.qtLeftover.setStyleSheet(self.styles['is_leftover'])
+        self.qtLeftover.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        subTitleWidgetLayout.addWidget(self.qtLeftover)
+
+        self.qtPreprepared = QtWidgets.QCheckBox()
+        self.qtPreprepared.setToolTip('is pre-prepared')
+        self.qtPreprepared.setStyleSheet(self.styles['is_preCooked'])
+        self.qtPreprepared.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        subTitleWidgetLayout.addWidget(self.qtPreprepared)
+
+        spacer = QtWidgets.QSpacerItem(2, 2, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        subTitleWidgetLayout.addItem(spacer)
+
+        return widget
+
+    def createSingleIngredient(self, ingredient):
+        widget = QtWidgets.QWidget()
+        widget.setProperty('obj', ingredient)
+        layout = QtWidgets.QGridLayout()
+        layout.setSpacing(5)
+        layout.setContentsMargins(0, 0, 0, 0)
+        widget.setLayout(layout)
+
+        bought = QtWidgets.QCheckBox()
+        bought.setToolTip('is already bought')
+        bought.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        layout.addWidget(bought, 0, 0)
+
+        size = QtWidgets.QSpinBox()
+        size.setRange(0, 999)
+        size.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        layout.addWidget(size, 0, 1)
+
+        unit = QtWidgets.QComboBox()
+        unit.addItems(Units().nameList)
+        unit.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        layout.addWidget(unit, 0, 2)
+
+        name = QtWidgets.QLabel(f' of {ingredient.name}')
+        name.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        layout.addWidget(name, 0, 3)
+
+        spacer = QtWidgets.QSpacerItem(2, 2, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        layout.addItem(spacer, 0, 4)
+
+        return widget
+
+    def refreshIngredientsList(self):
+        if self.ingredientLayout.count() != 0:
+            self.updateObjFromUi()
+        for idx in reversed(range(self.ingredientLayout.count())):
+            widget = self.ingredientLayout.itemAt(idx).widget()
+            widget.deleteLater()
+
+        if self.obj:
+            if type(self.obj).__name__ == "Ingredient":
+                ingredientList = [self.obj.name]
+            else:
+                ingredientList = self.obj.ingredients
+
+            for ingredient in ingredientList:
+                self.ingredientLayout.addWidget(self.createSingleIngredient(ingredient))
+
+    def applyObjData(self):
+        # if ingredient.size:
+        #     size.setValue(ingredient.size)
+        try:
+            self.qtBought.setCheckState(QtCore.Qt.CheckState(self.obj.is_bought * 2))
+            self.qtLeftover.setCheckState(QtCore.Qt.CheckState(self.obj.is_leftover * 2))
+            self.qtPreprepared.setCheckState(QtCore.Qt.CheckState(self.obj.is_preprepared * 2))
+        except AttributeError:
+            pass
+
+        for idx in range(self.ingredientLayout.count()):
+            widget = self.ingredientLayout.itemAt(idx).widget()
+            ingredientObj = widget.property('obj')
+            try:
+                sizeWidget = widget.layout().itemAtPosition(0, 1).widget()
+                sizeWidget.setValue(ingredientObj.size)
+                boughtWidget = widget.layout().itemAtPosition(0, 0).widget()
+                boughtWidget.setCheckState(QtCore.Qt.CheckState(ingredientObj.bought *2))
+                unitWidget = widget.layout().itemAtPosition(0, 2).widget()
+                unitWidget.setCurrentText(ingredientObj.unit)
+            except AttributeError:
+                pass
+
+    def updateObjFromUi(self):
+        self.obj.is_bought = self.qtBought.checkState() == QtCore.Qt.CheckState.Checked
+        self.obj.is_leftover = self.qtLeftover.checkState() == QtCore.Qt.CheckState.Checked
+        self.obj.is_preprepared = self.qtPreprepared.checkState() == QtCore.Qt.CheckState.Checked
+        print(f'-->update obj from ui for {self.obj.name}')
+        print(f'bought : {self.obj.is_bought}, is leftover : {self.obj.is_leftover}, is preperaed : {self.obj.is_preprepared}')
+        for idx in reversed(range(self.ingredientLayout.count())):
+            widget = self.ingredientLayout.itemAt(idx).widget()
+            ingredientObj = widget.property('obj')
+            boughtWidget = widget.layout().itemAtPosition(0, 0).widget()
+            ingredientObj.bought = boughtWidget.checkState() == QtCore.Qt.CheckState.Checked
+            sizeWidget = widget.layout().itemAtPosition(0, 1).widget()
+            ingredientObj.size = sizeWidget.value()
+            unitWidget = widget.layout().itemAtPosition(0, 2).widget()
+            ingredientObj.unit = unitWidget.currentText()
+
+            print(f'{ingredientObj.name} : {ingredientObj.bought}, {ingredientObj.size}, {ingredientObj.unit}')
+
+        return self.obj
+
 

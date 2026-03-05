@@ -72,8 +72,7 @@ class Exporter:
         self.rop_exporter_node.setColor(hou.Color((0, 0, 0)))
 
     def set_sop_attribute(self):
-        self.sop_exporter_node.setParms({'rop_exporter': self.rop_exporter_node.path(),
-                                         'export_name': "`chs(chs('rop_exporter')/export_name)`"})
+        self.sop_exporter_node.setParms({'rop_exporter': self.rop_exporter_node.path(),})
 
     def set_rop_attributes(self):
         export_name = self.sop_exporter_node.name()

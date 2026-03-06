@@ -1,12 +1,13 @@
 import sqlite3
 from incrementalBackup import incrementalBackup
 
+
 # Sql Datatypes:
-    # NULL > exists or not
-    # INTEGER
-    # REAL > float
-    # TEXT
-    # BLOB > images / mp3 ... = data
+# NULL > exists or not
+# INTEGER
+# REAL > float
+# TEXT
+# BLOB > images / mp3 ... = data
 
 # def convertIngredientObjToId(obj):
 #     #ingredientsId = [ingredient.id for ingredient in obj.ingredients]
@@ -39,26 +40,35 @@ def conformIngredientObjInRecipe(obj):
     obj.dbIngredients = str(ingredientList)
     return obj
 
+
 def conformObjToDBDatas(obj):
     for attr in obj.__dict__:
         attrType = type(obj.__dict__[attr]).__name__
-        print(attr, attrType, obj.__dict__[attr])
         if attrType == 'list':
             print("converting LIST attr {} to STR : {}".format(attr, obj.__dict__[attr]))
             obj.__dict__[attr] = str(obj.__dict__[attr])
+            print(f'to : {obj.__dict__[attr]}')
         elif attrType == 'bool':
             print("converting BOOL attr {} to INT : {}".format(attr, obj.__dict__[attr]))
             obj.__dict__[attr] = int(obj.__dict__[attr])
+            print(f'to : {obj.__dict__[attr]}')
+        elif attrType == 'Units':
+            print("converting UNITS attr {} to STR : {}".format(attr, obj.__dict__[attr]))
+            obj.__dict__[attr] = obj.__dict__[attr].returnString()
+            print(f'to : {obj.__dict__[attr]}')
+        elif attrType in ['int', 'str', 'NoneType']:
+            continue
+        else:
+            print(f'converting attr {attr} aborted : unsupported attr type : {attrType} : {obj.__dict__[attr]}')
     return obj
+
 
 def conformRating(obj):
-    if(obj.is_tested == False):
+    if (obj.is_tested == False):
         obj.rating = -1
-    if(obj.is_favorite == True):
+    if (obj.is_favorite == True):
         obj.rating = 10
     return obj
-
-
 
 
 # ###############
@@ -84,7 +94,7 @@ def conformRating(obj):
 #         season text,
 #         local integer
 #         )""")
-    
+
 
 #     #commit our command
 #     cxion.commit()
@@ -156,7 +166,7 @@ def conformRating(obj):
 #     stockObj.ingredients = convertIngredientObjToId(stockObj)
 
 #     c.execute("INSERT INTO stocks VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (stockObj.name, stockObj.category, stockObj.servingsQuantity, stockObj.servingsUnit, stockObj.nbr, stockObj.dateName, stockObj.dateIsExpirationDate, stockObj.ingredients))
-              
+
 #     cxion.commit()
 #     cxion.close()
 
@@ -170,7 +180,7 @@ def conformRating(obj):
 #     sqlQuery = """UPDATE stocks set name = ?, category = ?, servingsQuantity = ?, servingsUnit = ?, nbr = ?, dateName = ?, dateIsExpirationDate = ?, ingredients = ? WHERE rowid = ?"""
 #     data = (stockObj.name, stockObj.category, stockObj.servingsQuantity, stockObj.servingsUnit, stockObj.nbr, stockObj.dateName, stockObj.dateIsExpirationDate, stockObj.id, stockObj.ingredients)
 #     c.execute(sqlQuery, data)
-              
+
 #     cxion.commit()
 #     cxion.close()
 
@@ -181,10 +191,9 @@ def conformRating(obj):
 
 #     sqlQuery = """DELETE from stocks WHERE rowid = {}""".format(id)
 #     c.execute(sqlQuery)
-              
+
 #     cxion.commit()
 #     cxion.close()
-
 
 
 # ###############
@@ -197,10 +206,9 @@ def conformRating(obj):
 
 #     sqlQuery = """SELECT rowid * from ingredients WHERE rowid = {}""".format(id)
 #     c.execute(sqlQuery)
-              
+
 #     cxion.commit()
 #     cxion.close()
-
 
 
 # ###############
@@ -213,7 +221,7 @@ def conformRating(obj):
 
 #     sqlQuery = """SELECT rowid * from recipes WHERE rowid = {}""".format(id)
 #     c.execute(sqlQuery)
-              
+
 #     cxion.commit()
 #     cxion.close()
 
@@ -252,7 +260,6 @@ class DB:
             else:
                 self.cursor.execute(sqlQuery)
 
-
         if self.connexion is None or self.cursor is None:
             self.setConnexion()
         if isinstance(sqlQuery, list) is True:
@@ -266,7 +273,6 @@ class DB:
     def backup(self):
         incrementalBackup(self.pathToRecipeDb)
 
-
     ###############
     # DB creations
     ###############
@@ -276,15 +282,14 @@ class DB:
         self.commit(close=False)
         sqlQuery = """CREATE TABLE ingredients(
             name text,
-            category text,
+            db_category_id text,
             family text,
-            match_name text,
+            db_match_name text,
+            db_lazy_match_name text,
             vegan integer,
-            vegetarian integer,
             meat_replacement integer,
             protein real,
-            always_available integer,
-            special integer,
+            availability integer,
             season text,
             local integer
             )"""
@@ -333,7 +338,6 @@ class DB:
         # self.executeQuery(sqlQuery, False)
         self.commit(close=False)
 
-
     ###############
     # INGREDIENTS Table
     ###############
@@ -352,18 +356,29 @@ class DB:
     def addToIngredient(self, ingredientObj):
         if self.backupDB is True:
             incrementalBackup(self.pathToRecipeDb)
-        # sqlQuery = "INSERT INTO ingredients VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (ingredientObj.name, ingredientObj.category, ingredientObj.family, ingredientObj.match_name, ingredientObj.vegan, ingredientObj.vegetarian, ingredientObj.meat_replacement, ingredientObj.protein, ingredientObj.always_available, ingredientObj.special, ingredientObj.season, ingredientObj.local) 
+        # sqlQuery = "INSERT INTO ingredients VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (ingredientObj.name, ingredientObj.category, ingredientObj.family, ingredientObj.match_name, ingredientObj.vegan, ingredientObj.vegetarian, ingredientObj.meat_replacement, ingredientObj.protein, ingredientObj.always_available, ingredientObj.special, ingredientObj.season, ingredientObj.local)
         ingredientObj = conformObjToDBDatas(ingredientObj)
-        sqlQuery = "INSERT INTO ingredients VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        data = (ingredientObj.name, ingredientObj.category, ingredientObj.family, ingredientObj.match_name, ingredientObj.vegan, ingredientObj.vegetarian, ingredientObj.meat_replacement, ingredientObj.protein, ingredientObj.always_available, ingredientObj.special, ingredientObj.season, ingredientObj.local)
+        # sqlQuery = "INSERT INTO ingredients VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        # data = (ingredientObj.name, ingredientObj.category, ingredientObj.family, ingredientObj.match_name, ingredientObj.vegan, ingredientObj.vegetarian, ingredientObj.meat_replacement, ingredientObj.protein, ingredientObj.always_available, ingredientObj.special, ingredientObj.season, ingredientObj.local)
+        sqlQuery = "INSERT INTO ingredients VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        data = (ingredientObj.name, ingredientObj.db_category_id, ingredientObj.family, ingredientObj.db_match_name,
+                ingredientObj.db_lazy_match_name, ingredientObj.vegan, ingredientObj.meat_replacement,
+                ingredientObj.protein,
+                ingredientObj.availability, ingredientObj.season, ingredientObj.local)
         self.executeQuery((sqlQuery, data), True)
 
     def editIngredient(self, ingredientObj):
         if self.backupDB is True:
             incrementalBackup(self.pathToRecipeDb)
         ingredientObj = conformObjToDBDatas(ingredientObj)
-        sqlQuery = """UPDATE ingredients set name = ?, category = ?, family = ?, match_name = ?, vegan = ?, vegetarian = ?, meat_replacement = ?, protein = ?, always_available = ?, special = ?, season = ?, local = ? WHERE rowid = ?"""
-        data = (ingredientObj.name, ingredientObj.category, ingredientObj.family, ingredientObj.match_name, ingredientObj.vegan, ingredientObj.vegetarian, ingredientObj.meat_replacement, ingredientObj.protein, ingredientObj.always_available, ingredientObj.special, ingredientObj.season, ingredientObj.local, ingredientObj.id)
+        print('----->>> conform done')
+        for attr in ingredientObj.__dict__:
+            print(f'{attr}: {type(ingredientObj.__dict__[attr])} : {ingredientObj.__dict__[attr]}')
+        sqlQuery = """UPDATE ingredients set name = ?, db_category_id = ?, family = ?, db_match_name = ?, db_lazy_match_name = ?, vegan = ?, meat_replacement = ?, protein = ?, availability = ?, season = ?, local = ? WHERE rowid = ?"""
+        data = (ingredientObj.name, ingredientObj.db_category_id, ingredientObj.family, ingredientObj.db_match_name,
+                ingredientObj.db_lazy_match_name, ingredientObj.vegan, ingredientObj.meat_replacement,
+                ingredientObj.protein, ingredientObj.availability, ingredientObj.season, ingredientObj.local,
+                ingredientObj.id)
         self.executeQuery((sqlQuery, data), True)
 
     def removeIngredient(self, id):
@@ -371,7 +386,6 @@ class DB:
             incrementalBackup(self.pathToRecipeDb)
         sqlQuery = """DELETE from ingredients WHERE rowid = {}""".format(id)
         self.executeQuery(sqlQuery, True)
-
 
     ###############
     # RECIPES Table
@@ -395,7 +409,10 @@ class DB:
         recipeObj = conformObjToDBDatas(recipeObj)
         recipeObj = conformRating(recipeObj)
         sqlQuery = "INSERT INTO recipes VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        data = (recipeObj.name, recipeObj.match_name, recipeObj.category_id, recipeObj.type, recipeObj.origin, recipeObj.tags, recipeObj.dbIngredients, recipeObj.before_recipe, recipeObj.recipe, recipeObj.suggestion, recipeObj.notes, recipeObj.files, recipeObj.cooking_time, recipeObj.preparation_time, recipeObj.is_best_reheated, recipeObj.rating, recipeObj.is_wip)
+        data = (recipeObj.name, recipeObj.match_name, recipeObj.category_id, recipeObj.type, recipeObj.origin,
+                recipeObj.tags, recipeObj.dbIngredients, recipeObj.before_recipe, recipeObj.recipe,
+                recipeObj.suggestion, recipeObj.notes, recipeObj.files, recipeObj.cooking_time,
+                recipeObj.preparation_time, recipeObj.is_best_reheated, recipeObj.rating, recipeObj.is_wip)
         self.executeQuery((sqlQuery, data), True)
 
     def editRecipe(self, recipeObj):
@@ -405,7 +422,11 @@ class DB:
         recipeObj = conformObjToDBDatas(recipeObj)
         recipeObj = conformRating(recipeObj)
         sqlQuery = """UPDATE recipes set name = ?, match_name = ?, category_id = ?, type = ?, origin = ?, tags = ?, ingredients = ?, before_recipe = ?, recipe = ?, suggestion = ?, notes = ?, files = ?, cooking_time = ?, preparation_time = ?, is_best_reheated = ?, rating = ?, is_wip = ? WHERE rowid = ?"""
-        data = (recipeObj.name, recipeObj.match_name, recipeObj.category_id, recipeObj.type, recipeObj.origin, recipeObj.tags, recipeObj.dbIngredients, recipeObj.before_recipe, recipeObj.recipe, recipeObj.suggestion, recipeObj.notes, recipeObj.files, recipeObj.cooking_time, recipeObj.preparation_time, recipeObj.is_best_reheated, recipeObj.rating, recipeObj.is_wip, recipeObj.id)
+        data = (recipeObj.name, recipeObj.match_name, recipeObj.category_id, recipeObj.type, recipeObj.origin,
+                recipeObj.tags, recipeObj.dbIngredients, recipeObj.before_recipe, recipeObj.recipe,
+                recipeObj.suggestion, recipeObj.notes, recipeObj.files, recipeObj.cooking_time,
+                recipeObj.preparation_time, recipeObj.is_best_reheated, recipeObj.rating, recipeObj.is_wip,
+                recipeObj.id)
         self.executeQuery((sqlQuery, data), True)
 
     def removeRecipe(self, id):
@@ -413,7 +434,6 @@ class DB:
             incrementalBackup(self.pathToRecipeDb)
         sqlQuery = """DELETE from recipes WHERE rowid = {}""".format(id)
         self.executeQuery(sqlQuery, True)
-
 
     ###############
     # STOCKS Table
@@ -430,7 +450,12 @@ class DB:
         if self.backupDB is True:
             incrementalBackup(self.pathToCustom)
         stockObj = conformIngredientObjInRecipe(stockObj)
-        sqlQuery = "INSERT INTO stocks VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (stockObj.name, stockObj.category, stockObj.servingsQuantity, stockObj.servingsUnit, stockObj.nbr, stockObj.dateName, stockObj.dateIsExpirationDate, stockObj.dbIngredients)
+        sqlQuery = "INSERT INTO stocks VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (stockObj.name, stockObj.category,
+                                                                          stockObj.servingsQuantity,
+                                                                          stockObj.servingsUnit, stockObj.nbr,
+                                                                          stockObj.dateName,
+                                                                          stockObj.dateIsExpirationDate,
+                                                                          stockObj.dbIngredients)
         self.executeQuery(sqlQuery, True)
 
     def editStock(self, stockObj):
@@ -438,7 +463,8 @@ class DB:
             incrementalBackup(self.pathToCustom)
         stockObj = conformIngredientObjInRecipe(stockObj)
         sqlQuery = """UPDATE stocks set name = ?, category = ?, servingsQuantity = ?, servingsUnit = ?, nbr = ?, dateName = ?, dateIsExpirationDate = ?, ingredients = ? WHERE rowid = ?"""
-        data = (stockObj.name, stockObj.category, stockObj.servingsQuantity, stockObj.servingsUnit, stockObj.nbr, stockObj.dateName, stockObj.dateIsExpirationDate, stockObj.dbIngredients, stockObj.id)
+        data = (stockObj.name, stockObj.category, stockObj.servingsQuantity, stockObj.servingsUnit, stockObj.nbr,
+                stockObj.dateName, stockObj.dateIsExpirationDate, stockObj.dbIngredients, stockObj.id)
         self.executeQuery((sqlQuery, data), True)
 
     def removeStock(self, id):
@@ -446,7 +472,6 @@ class DB:
             incrementalBackup(self.pathToCustom)
         sqlQuery = """DELETE from stocks WHERE rowid = {}""".format(id)
         self.executeQuery(sqlQuery, True)
-
 
     ###############
     # Config Table

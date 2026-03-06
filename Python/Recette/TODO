@@ -1,0 +1,141 @@
+# TODO
+Qt to Android Tuto
+https://www.qt.io/blog/taking-qt-for-python-to-android
+
+db: switch all to db and DB class!
+db: addingredient a finir (manage categories)
+db: check data before import
+
+ui: crockpot mode : quick recette
+ui: quick add stock ui
+ui: better display recipe
+ui: sync both ingredient and recipe filter
+
+search: space = ','
+search: recherche recette sans ingredient !piment !blé
+search: filter de recette et trop lent ac ingredients
+search: bobun sort dans ingredient canelle
+search: search module a finir pour ingredients et a tester
+search: lard !fume exclut tout
+search: check reut old searches
+search: match name exclude type > reprocess db :)
+
+
+bug: impossible de rename une recette // edit recette duplique > doublon
+bug: ingredient multi parent are parented to first one
+bug: !! conform des ingredients de recette sur liste d ingredient a refaire  (on sait pas sur quoi ca match et peu precis)!!
+
+menu: display recipe from menu
+menu: separer entree / plat / dessert
+menu: manual edit ingredient / recette and export / set ingredient-recipe as leftover (no shopping needed) or bought pre made
+menu: case reste a cocher: et add to stock
+menu: removeFromMenu generates bug with shiboken on remove item
+menu: instance d'ingredient est tjs identique : 3 menus ac de l oignon : liste des courses aura 3* la meme quantite d oignon
+menu: rename crockpot / multi crockpot
+
+    ingredient: remove ingredient checkbox ?
+ingredient: remove from db only if no recipe / stock is in use
+ingredient: temps de cuisson
+ingredient: add aisle to obj and db
+ingredient: remove RecetteUI.units > use Recette Units instead
+ingredient: local et de saison
+    ingredient: nesting under categories
+
+ingredientContent: bug de changement de nom sur le match name
+
+recipe: update search ingredient result on tab switch
+recipe: special kids : jambon pates with kid rating
+recipe: filter with full always available ingredients
+recipe : has been tested : pas de sens car si rating = teste !
+recipe: add servings data
+recipe: regen ui on edit
+recipe : rich text editor
+recipe: ajout de menus generic sans ingredients a flagger : "gateau" = pas d'ingredient listable
+recipe: concept de base et toppings (pate a pizza / cake / crepes) completees par variantes (reine / chorizo ....)
+recipe: concept de variantes de recette (variantes completes (recette porc au sucre )ou partielles (humous))
+recipe: gestion des poids d ingredients et repartition sur multi ingredients (poid des aliments total et pourcentage par classe)
+recipe: avertissement pour trempage ingredients.... prepa la veille
+recipe: tab a tester
+recipe: ajout notion repos pour recette
+recipe: list stocks
+recipe: nesting under categories
+recipe: ingredient shows main categories (meat / starch / vegetable / others), ingredients are nested under
+recipe: bug while switching edit mode
+
+groceries: ingredient list management for recipe (checkbox / remove on keyboard replace)
+groceries: selection ingredient selectionne le/les repas du menu (et inversement)
+groceries: manage ingredient form : fresh / canned / frozen
+groceries : manage shopping alley (fresh / dairy / vegetables / canned...)
+groceries : change ui if premade is checked to get unit and size attrs available
+use precooked term
+
+user : allergy and preferences
+user : dislikes
+
+general : trad fr
+general: custompprint for logging
+general: sauvegarde / import / envoyer mail recap / hitorique
+general: links d'accompagnement (legumes / viande) et menu tout fait (curry indien royal)
+general: ds vu liste des courses/menus proposer de congeler (avoir jour des courses)
+general: jour a contrainte de temps (sport/douche....)
+general: ouverture rapide et progress bar
+general: colors and beautiful calendar
+general: tool to check errors (ie: missing hardcoded ingredients)
+general: by attribute editor (ie for aisle attribute set each ingredient)
+
+addon : standalone for android
+addon : standalone android recipe editor (scan / ocr + tag text for extraction)
+
+
+stock : attach ingredient data to it
+stock : add from recipe / ingredient / crockpot only
+stock : quick add stock ui from menu
+
+goals: restriction des aliments : entre 0 et 1 fois pour le boeuf : 1-3 poisson 1-2 oeufs
+goals : from history suggest less eaten ingredient
+
+history: add history : store recipe and ingredients
+
+
+Reco alimentaire:
+5 fruits et legumes par jour + au moins un feculent complet (pain, pates, semoule, riz) + legume secs (lentille, haricots secs, pois chiche) 2* semaine
+
+https://www.mangerbouger.fr/manger-mieux/la-fabrique-a-menus
+
+ajouter des fruits a coque ds le yaourt
+avoir des bocaux / conserves
+
+https://reporterre.net/A-nouveau-des-scientifiques-appellent-a-manger-moins-de-viande
+https://www.anses.fr/fr/content/regimes-vegetariens-effets-sur-la-sante-et-reperes-alimentaires
+
+    menu item edit = txt insert in filter recipe and ingredient
+    case goal check
+    zone texte libre pour notes a cote des goals
+    idees de recette /ingredient a finir pour plus tard
+    liste des courses a split (speciaux / viande / legume / divers / toujours dispo)
+    dark ui
+    menu icomplet / complet
+    ajouter des repas dans les menus
+"""
+
+
+empanadas
+panade
+wrap
+tartiflette
+piemontaise
+kefta
+aubergine au tahini
+tarte poireau
+tarte jambon ytomate creme moutarde herbe de provence
+tarte aubergine pesto
+burger
+sandwich
+
+vege pois casses menthe curry gout bobun
+gratin de pates
+panade
+galette des rois
+
+
+

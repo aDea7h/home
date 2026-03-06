@@ -1,24 +1,143 @@
 # from email.contentmanager import maintype
+# from linecache import lazycache
 
 from PySide6 import QtCore, QtGui, QtWidgets
 from TextEditorWidget import TextEdit
-from Recette import Units
+from Recette import Units, completeMatchName
 
-class GenericWidget(QtWidgets.QWidget):
-    def __init__(self, ui):
+
+class MatchNameWidget(QtWidgets.QWidget):
+    #TODO setText() : called for autofill > autofill and refresh matchNameTreeWidget
+    #TODO Bug : changement de nom en identique et matchname vide supprime l entree nom
+    def __init__(self, outer, ui):
         super().__init__()
+        self.outer = outer
         self.ui = ui
-        self.layout = QtWidgets.QVBoxLayout()
+        self.matchName = []
+        self.lazyMatchName = []
+        self.layout = QtWidgets.QGridLayout()
         self.setLayout(self.layout)
+        self.matchNameLineEdit = QtWidgets.QLineEdit()
+        self.matchNameLineEdit.setPlaceholderText('Add Match Name')
+        self.liveMatchText = QtWidgets.QLabel('also matches :')
+        self.addButton = QtWidgets.QPushButton("+")
+        self.addButton.setSizePolicy(QtWidgets.QSizePolicy.Policy.Maximum, QtWidgets.QSizePolicy.Policy.Maximum)
+        self.removeButton = QtWidgets.QPushButton("-")
+        self.matchNameTreeWidget = QtWidgets.QTreeWidget()
+        self.matchNameTreeWidget.setColumnCount(2)
+        self.matchNameTreeWidget.setHeaderLabels(['Match Name', 'Also Matching'])
 
-        # ----->> Ui Elements
+        self.layout.addWidget(self.matchNameLineEdit, 0, 0, 1, 1)
+        self.layout.addWidget(self.addButton, 0, 1, 1, 1)
+        self.layout.addWidget(self.liveMatchText, 1, 0, 1, 1)
+        self.layout.addWidget(self.removeButton, 1, 1, 1, 1)
+        self.layout.addWidget(self.matchNameTreeWidget, 2, 0, 2, 2)
 
-        # ----->> Init Ui Elements
+        self.setConnections()
 
-        # ----->> Set Layout
+    def setConnections(self):
+        self.addButton.clicked.connect(self.addMatchName)
+        self.removeButton.clicked.connect(lambda: self.removeMatchName(None))
+        self.matchNameLineEdit.textChanged.connect(self.tipOnMatchName)
+        self.matchNameLineEdit.returnPressed.connect(self.addMatchName)
+
+    def clear(self):
+        self.matchNameLineEdit.clear()
+        self.matchNameTreeWidget.clear()
+        self.matchName = []
+        self.lazyMatchName = []
+
+    def setText(self, text, specialMatch=None):
+        def removeOldSpecialMatch(text, specialMatch):
+            for itemIdx in range(self.matchNameTreeWidget.topLevelItemCount()):
+                item = self.matchNameTreeWidget.topLevelItem(itemIdx)
+                if item.text(0) == specialMatch:
+                    self.removeMatchName(item)
 
 
-class IngredientWidget(QtWidgets.QWidget):
+        if specialMatch is not None:
+            removeOldSpecialMatch(text, specialMatch)
+        if isinstance(text, str):
+            self.addMatchName(text, specialMatch)
+        elif isinstance(text, list):
+            for item in text:
+                self.addMatchName(item, specialMatch)
+        else:
+            raise Exception('text must be str or list')
+
+
+    def tipOnMatchName(self):
+        matchName = self.matchNameLineEdit.text()
+        lazyMatchName = completeMatchName(matchName)
+        if lazyMatchName is None:
+            lazyMatchName = ''
+        self.liveMatchText.setText(f'also matches : {lazyMatchName}')
+
+    def addMatchName(self, matchName=None, specialMatch=None):
+        def checkEntryExistence(matchName, specialMatch):
+            '''If entry in Tree exists, return True else None'''
+            for itemIdx in range(self.matchNameTreeWidget.topLevelItemCount()):
+                item = self.matchNameTreeWidget.topLevelItem(itemIdx)
+                match = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+                if specialMatch is not None and specialMatch == item.text(0)[1:-1]:
+                    """remove old special match entries"""
+                    idx = self.matchNameTreeWidget.indexOfTopLevelItem(item)
+                    self.matchNameTreeWidget.takeTopLevelItem(idx)
+                    return False
+                if matchName == match:
+                    print(f'match name already exists {matchName}:{specialMatch}')
+                    return True
+            return False
+
+        if matchName is None:
+            matchName = self.matchNameLineEdit.text()
+            matchName = matchName.strip()
+            if matchName == '':
+                return
+        print(f'-->> input matchname : {matchName}, {specialMatch}')
+        if checkEntryExistence(matchName, specialMatch) is True:
+            return
+        lazyMatchName = completeMatchName(matchName)
+        if lazyMatchName is None:
+            lazyMatchName = ''
+        if specialMatch is not None:
+            item = QtWidgets.QTreeWidgetItem([f'[{specialMatch}]', lazyMatchName])
+        else:
+            item = QtWidgets.QTreeWidgetItem([matchName, lazyMatchName])
+        item.setData(0, QtCore.Qt.ItemDataRole.UserRole, matchName)
+        if specialMatch is not None:
+            item.setDisabled(True)
+        self.matchNameTreeWidget.addTopLevelItem(item)
+        self.matchNameLineEdit.clear()
+        self.updateMatchNameAttributes()
+
+    def removeMatchName(self, item=None):
+        if item is None:
+            item = self.matchNameTreeWidget.currentItem()
+            if item.isDisabled():
+                return
+        idx = self.matchNameTreeWidget.indexOfTopLevelItem(item)
+        self.matchNameTreeWidget.takeTopLevelItem(idx)
+        self.updateMatchNameAttributes()
+
+
+    def updateMatchNameAttributes(self):
+        matchName = []
+        lazyMatchName = []
+        for itemIdx in range(self.matchNameTreeWidget.topLevelItemCount()):
+            item = self.matchNameTreeWidget.topLevelItem(itemIdx)
+            match = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
+            if match != '' and match not in matchName:
+                matchName.append(item.data(0, QtCore.Qt.ItemDataRole.UserRole))
+            match = item.text(1)
+            if match != '' and match not in lazyMatchName:
+                lazyMatchName.append(item.text(1))
+        self.matchName = matchName
+        self.lazyMatchName = lazyMatchName
+        print('new matching names :', self.matchName, self.lazyMatchName)
+
+
+class IngredientWidgetUiSetup(QtWidgets.QWidget):
     def __init__(self, ui, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.ui = ui
@@ -73,25 +192,26 @@ class IngredientWidget(QtWidgets.QWidget):
         self.qtIngredientColumn = QtWidgets.QWidget()
         self.qtIngredientColumnLayout = QtWidgets.QHBoxLayout()
         self.qtIngredientColumn.setLayout(self.qtIngredientColumnLayout)
-        self.qtIngredientActionWidget = QtWidgets.QWidget()
-        self.qtIngredientActionWidgetLayout = QtWidgets.QVBoxLayout()
+        # self.qtIngredientActionWidget = QtWidgets.QWidget()
+        # self.qtIngredientActionWidgetLayout = QtWidgets.QVBoxLayout()
 
-        # left buttons
-        self.layout.addWidget(self.qtIngredientFilter)
-        self.qtIngredientActionWidget.setLayout(self.qtIngredientActionWidgetLayout)
-        self.qtIngredientAllLabel = QtWidgets.QLabel("Check")
-        self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientAllLabel)
-        self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientCheckAllButton)
-        self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientCheckNoneButton)
-        self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientCheckInvertButton)
-        self.qtIngredientSelLabel = QtWidgets.QLabel("Select")
-        self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientSelLabel)
-        self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientSelAllButton)
-        self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientSelNoneButton)
-        self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientSelInvertButton)
+        # # left buttons
+
+        # self.qtIngredientActionWidget.setLayout(self.qtIngredientActionWidgetLayout)
+        # self.qtIngredientAllLabel = QtWidgets.QLabel("Check")
+        # self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientAllLabel)
+        # self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientCheckAllButton)
+        # self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientCheckNoneButton)
+        # self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientCheckInvertButton)
+        # self.qtIngredientSelLabel = QtWidgets.QLabel("Select")
+        # self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientSelLabel)
+        # self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientSelAllButton)
+        # self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientSelNoneButton)
+        # self.qtIngredientActionWidgetLayout.addWidget(self.qtIngredientSelInvertButton)
 
         # ingredients columns
-        self.qtIngredientColumnLayout.addWidget(self.qtIngredientActionWidget)
+        self.layout.addWidget(self.qtIngredientFilter)
+        # self.qtIngredientColumnLayout.addWidget(self.qtIngredientActionWidget)
         self.qtIngredientColumnLayout.addWidget(self.qtMeatColumnTree)
         self.qtIngredientColumnLayout.addWidget(self.qtVegetableColumnTree)
         self.qtIngredientColumnLayout.addWidget(self.qtStarchColumnTree)
@@ -99,7 +219,7 @@ class IngredientWidget(QtWidgets.QWidget):
         self.layout.addWidget(self.qtIngredientColumn)
 
 
-class RecipeWidget(QtWidgets.QWidget):
+class RecipeWidgetUiSetup(QtWidgets.QWidget):
     def __init__(self, outer, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.outer = outer
@@ -179,18 +299,8 @@ class RecipeWidget(QtWidgets.QWidget):
         self.layout.addWidget(self.qtRecipeGroupBox)
         self.qtAllGroupPageLayout.addWidget(self.qtTreeRecipe)
 
-    def setConnections(self):
-        self.qtRecipeGroupBox.currentChanged.connect(self.switchTab)
 
-    def switchTab(self):
-        idx = self.qtRecipeGroupBox.currentIndex()
-        widget = self.qtRecipeGroupBox.widget(idx)
-        layout = widget.layout()
-        layout.addWidget(self.qtTreeRecipe)
-        self.outer.filterRecipe()
-
-
-class StockWidget(QtWidgets.QWidget):
+class StockWidgetUiSetup(QtWidgets.QWidget):
     def __init__(self, ui):
         super().__init__()
         self.ui = ui
@@ -210,7 +320,7 @@ class StockWidget(QtWidgets.QWidget):
         self.layout.addWidget(self.qtStockedCookedTree)
 
 
-class GoalsAndNotesWidget(QtWidgets.QWidget):
+class GoalsAndNotesWidgetUiSetup(QtWidgets.QWidget):
     def __init__(self, ui):
         super().__init__()
         self.ui = ui
@@ -243,7 +353,7 @@ class GoalsAndNotesWidget(QtWidgets.QWidget):
         #                                          QtWidgets.QSizePolicy.Policy.Maximum)
 
 
-class MenuWidget(QtWidgets.QWidget):
+class MenuWidgetUiSetup(QtWidgets.QWidget):
     def __init__(self, ui):
         super().__init__()
         self.ui = ui
@@ -280,7 +390,7 @@ class MenuWidget(QtWidgets.QWidget):
         # self.leftPaneLayout.addWidget(self.qtMenuOperations)
 
 
-class GroceriesWidget(QtWidgets.QWidget):
+class GroceriesWidgetUiSetup(QtWidgets.QWidget):
     def __init__(self, outer):
         super().__init__()
         self.outer = outer
@@ -393,20 +503,85 @@ class GroceriesWidget(QtWidgets.QWidget):
         self.outer.copyToClipboard(self.groceriesExport)
 
 
-class RecipeContentWidget(QtWidgets.QWidget): #QDialog
-
-    def __init__(self, parent, ui):
+class IngredientContentWidgetUiSetup(QtWidgets.QWidget):
+    def __init__(self, outer, ui):
         super().__init__()
-        self.parent = parent
+        self.outer = outer
         self.ui = ui
-        self.setWindowTitle("Recipe Content")
-        if self.ui['icons'] is not None:
-            self.setWindowIcon(self.ui['icons']['menu'])
+        # self.setWindowTitle("Edit Ingredient")
+        # if self.ui['icons'] is not None:
+        #     self.setWindowIcon(self.ui['icons']['menu'])
+
+        # ----->> Ui Elements
+        self.qtNameLineEdit = QtWidgets.QLineEdit()
+        self.qtMatchNameWidget = MatchNameWidget(self, self.ui)
+        self.qtCategoryTree = QtWidgets.QTreeWidget()
+        self.qtIsVeganCombo = QtWidgets.QComboBox()
+        self.qtIsMeatReplacementChk = QtWidgets.QCheckBox("Contribute to replace meat")
+        self.qtProteinContribution = QtWidgets.QSpinBox()
+        self.qtIngredientAvailability = QtWidgets.QComboBox()
+        self.qtSeason = QtWidgets.QLineEdit()
+        self.qtLocal = QtWidgets.QLineEdit()
+        self.qtTestButton = QtWidgets.QPushButton("Test Me")
+
+        # Validation Accept / Reject Buttons
+        self.qtButtonBox = QtWidgets.QDialogButtonBox()
+        self.validationButton = QtWidgets.QPushButton("Save Ingredient")
+        self.qtButtonBox.addButton(self.validationButton, QtWidgets.QDialogButtonBox.ButtonRole.AcceptRole)
+        self.qtButtonBox.addButton("Cancel", QtWidgets.QDialogButtonBox.ButtonRole.RejectRole)
+        self.qtEditButton = QtWidgets.QPushButton("Edit")
+        self.qtCloseButton = QtWidgets.QPushButton("Close")
+        self.qtSeason.setPlaceholderText('set mounths as: 1-3, 10-12 for october through march')
+        self.qtLocal.setPlaceholderText('set mounths as: 1-3, 10-12 for october through march')
+
+        # ----->> Init Ui Elements
+        font = self.qtNameLineEdit.font()
+        font.setPointSize(24)
+        self.qtNameLineEdit.setFont(font)
+        self.qtNameLineEdit.setPlaceholderText('Name')
+        self.qtCategoryTree.setHeaderItem(QtWidgets.QTreeWidgetItem(['Nest Ingredient in Food Category.ies']))
+        self.qtCategoryTree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.qtIsVeganCombo.addItems(['Not Vegetarian', 'Vegetarian', 'Vegan'])
+        self.qtIngredientAvailability.addItems(
+            ['Always available, no shopping needed', 'Available, re-check quantity', 'Shopping needed', 'hard to find'])
+
+        # ----->> Setup Ui
+        self.layout = QtWidgets.QVBoxLayout()
+        self.setLayout(self.layout)
+        self.layout.addWidget(self.qtNameLineEdit)
+        self.layout.addWidget(self.qtMatchNameWidget)
+        self.layout.addWidget(self.qtCategoryTree)
+
+        self.qtAttributesGroupBox = QtWidgets.QGroupBox()
+        self.qtAttributesGroupBox.setTitle("Ingredient's Attributes")
+        self.qtAttributesGroupBoxLayout = QtWidgets.QGridLayout()
+        self.qtAttributesGroupBox.setLayout(self.qtAttributesGroupBoxLayout)
+        self.qtAttributesGroupBoxLayout.addWidget(self.qtIsVeganCombo, 0, 0, 1, 2)
+        self.qtAttributesGroupBoxLayout.addWidget(self.qtIsMeatReplacementChk, 1, 0, 1, 2)
+        self.qtAttributesGroupBoxLayout.addWidget(QtWidgets.QLabel("Protein supply (g/100g)"), 2, 0, 1, 1)
+        self.qtAttributesGroupBoxLayout.addWidget(self.qtProteinContribution, 2, 1, 1, 1)
+        self.qtAttributesGroupBoxLayout.addWidget(self.qtIngredientAvailability, 3, 0, 1, 2)
+        self.qtAttributesGroupBoxLayout.addWidget(self.qtSeason, 4, 0, 1, 2)
+        self.qtAttributesGroupBoxLayout.addWidget(self.qtLocal, 5, 0, 1, 2)
+        self.qtAttributesGroupBoxLayout.addWidget(self.qtTestButton, 6, 0, 1, 2)
+
+        self.layout.addWidget(self.qtAttributesGroupBox)
+        self.layout.addWidget(self.qtButtonBox)
+
+
+class RecipeContentWidgetUiSetup(QtWidgets.QWidget): #QDialog
+    def __init__(self, outer, ui):
+        super().__init__()
+        self.outer = outer
+        self.ui = ui
+        # self.setWindowTitle("Recipe Content")
+        # if self.ui['icons'] is not None:
+        #     self.setWindowIcon(self.ui['icons']['menu'])
 
         # ----->> Ui Elements
         # recipe identity
         self.qtNameLineEdit = QtWidgets.QLineEdit()
-        self.qtMatchNameLineEdit = QtWidgets.QLineEdit()
+        self.qtMatchNameLineEdit = MatchNameWidget(self, self.ui)
         self.qtCategoryTree = QtWidgets.QTreeWidget()
         self.qtStarterTypeCheckBox = QtWidgets.QCheckBox('Starter')
         self.qtDishTypeCheckBox = QtWidgets.QCheckBox('Dish')
@@ -452,7 +627,6 @@ class RecipeContentWidget(QtWidgets.QWidget): #QDialog
         font.setPointSize(24)
         self.qtNameLineEdit.setFont(font)
         self.qtNameLineEdit.setPlaceholderText('Name')
-        self.qtMatchNameLineEdit.setPlaceholderText('Additional matching names (separated by ",")')
         self.qtCategoryTree.setHeaderItem(QtWidgets.QTreeWidgetItem(['Nest recipe in category.ies']))
         self.qtCategoryTree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.qtOriginTree.setHeaderItem(QtWidgets.QTreeWidgetItem(["Recipe's origin"]))
@@ -627,7 +801,7 @@ class RecipeContentWidget(QtWidgets.QWidget): #QDialog
         # self.qtDisplayButtonsWidget.setEnabled(enabled)
 
 
-class MenuTreeWidgetContent(QtWidgets.QTreeWidgetItem):
+class MenuTreeWidgetContentUiSetup(QtWidgets.QTreeWidgetItem):
     def __init__(self, outer, name, obj):
         super().__init__()
         self.outer = outer
@@ -799,5 +973,6 @@ class MenuTreeWidgetContent(QtWidgets.QTreeWidgetItem):
             print(f'{ingredientObj.name} : {ingredientObj.bought}, {ingredientObj.size}, {ingredientObj.unit}')
 
         return self.obj
+
 
 

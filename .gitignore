@@ -1,1 +1,2 @@
-/.sync.ffs_db
+/.venv/
+/Python/Recette/recipe_database_withCategories.db

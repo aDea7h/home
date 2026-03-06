@@ -12,6 +12,7 @@ proposer vieilles recettes de ts les jours
 """
 import os.path
 import sys
+from copy import deepcopy
 
 import pandas
 import odf
@@ -26,6 +27,11 @@ from bigtree import DAGNode, find, preorder_iter
 import copy
 global prefs
 
+def completeMatchName(entry, onlyDifferent=True):
+    matchPattern = unidecode(entry).strip()
+    if matchPattern == entry and onlyDifferent:
+        return None
+    return matchPattern
 
 def removeNans(dict):
     def removeNan(val):
@@ -51,22 +57,21 @@ def splitValueToList(value):
 
 def attrListToAttrDict(attrList, objType):
     if objType == 'Ingredient':
-        if len(attrList) != 13:
+        if len(attrList) != 12:
             raise Exception("Db data doesn't match attributes created")
         attrs = {
             'id':  attrList[0],
             'name':  attrList[1],
-            'category':  attrList[2],
+            'db_category_id':  attrList[2],
             'family':  attrList[3],
-            'match_name':  attrList[4],
-            'vegan': attrList[5],
-            'vegetarian': attrList[6],
+            'db_match_name':  attrList[4],
+            'db_lazy_match_name': attrList[5],
+            'vegan': attrList[6],
             'meat_replacement': attrList[7],
             'protein': attrList[8],
-            'always_available': attrList[9],
-            'special': attrList[10],
-            'season': attrList[11],
-            'local': attrList[12],
+            'availability': attrList[9],
+            'season': attrList[10],
+            'local': attrList[11],
         }
     elif objType == 'Recipe':
         if len(attrList) != 18:
@@ -162,24 +167,40 @@ def importExportDb(data, libPath):
         db.exportDataToFile(data['filePath'])
 
 def isVegan(obj):
-    if type(obj.ingredients) in [type(None)] or len(obj.ingredients) == 0:
+    """Computes vegan attribute as an integer
+    2:Vegan / 1:Vegetarian / 0:Meat / None: unknown result
+    """
+    # if type(obj.ingredients) in [type(None)] or len(obj.ingredients) == 0:
+    if len(obj.ingredients) == 0:
         return None
-    vegan = True
+
+    vegan = 2
+    print(obj.ingredients)
     for ingredient in obj.ingredients:
+        print(ingredient)
+        if isinstance(ingredient, tuple):
+            ingredient, size = ingredient
         if isinstance(ingredient, str): # not an Ingredient class type returns None
             vegan = None
             break
-        if ingredient.vegan is False:
-            vegan = False
+        print(vegan, ingredient.vegan)
+        if ingredient.vegan is None:
+            return None
+        vegan = min(vegan, ingredient.vegan)
+        if vegan == 0:
             break
-    # print('is vegan : '+str(vegan))
     return vegan
 
-def copyIngredientObj(ingredientObjTmp, ingredientObj):
+def copyIngredientObj(ingredientObj, ingredientObjTmp=None):
+    if ingredientObjTmp is None:
+        attrs = {
+            'name': deepcopy(ingredientObj.name),
+        }
+        ingredientObjTmp = Ingredient(attrs, False)
     for attr in ingredientObjTmp.__dict__.keys():
         if attr in ['size', 'qtItem']:
             continue
-        ingredientObjTmp.__dict__[attr] = ingredientObj.__dict__[attr]
+        ingredientObjTmp.__dict__[attr] = deepcopy(ingredientObj.__dict__[attr])
     # print('copy out : ', ingredientObjTmp.__dict__)
     return ingredientObjTmp
 
@@ -190,11 +211,11 @@ def copyRecipeObj(recipeObj):
     for attr in recipeObjTmp.__dict__.keys():
         if attr in ['qtItem', 'ingredients']:
             continue
-        recipeObjTmp.__dict__[attr] = recipeObj.__dict__[attr]
+        recipeObjTmp.__dict__[attr] = deepcopy(recipeObj.__dict__[attr])
     ingredientList = []
     for ingredient in recipeObj.ingredients:
-        ingredientObjTmp = Ingredient({'name': ingredient.name}, False)
-        ingredientList.append(copyIngredientObj(ingredientObjTmp, ingredient))
+        # ingredientObjTmp = Ingredient({'name': ingredient.name}, False)
+        ingredientList.append(copyIngredientObj(ingredient))
     recipeObjTmp.ingredients = ingredientList
     print('copy out : ', recipeObjTmp.__dict__)
     return recipeObjTmp
@@ -204,6 +225,10 @@ class Units:
     def __init__(self):
         self.name = 'g'
         self.nameList = ['g', 'kg', 'L', 'cL', 'u']
+        self.quantity = 0
+
+    def returnString(self):
+        return str(f'({self.quantity}, {self.name}, )')
 
 class Preferences:
     def __init__(self, libPath):
@@ -239,75 +264,82 @@ class Ingredient:
         self.id = -1
         self.name = None
         self.category = None
-        self.categoryId = None
+        self.db_category_id = None
         self.family = None
+        self.db_match_name = []
+        self.db_lazy_match_name = []
         self.match_name = []
-        self.season = None
-        self.local = False
-        # self.nutritional_value = None  # lipids / glucids / vitamins / iron...
-        # self.vegetarian = None
         self.vegan = None
-        self.vegetarian = None
         self.meat_replacement = None
         self.protein = None
-        self.always_available = None
-        self.special = None
+        self.availability = 3
+        self.season = None
+        self.local = False
+
+
+        #additional attrs for ui funcs
         self.is_bought = False
         self.aisle = None
         self.fullCreation = fullCreation
 
         attrs = self.conformAttrs(attrs)
 
-        self.visible = True  # not stored in Db usefull ?
+        # self.nutritional_value = None  # lipids / glucids / vitamins / iron...
         self.size = 0  # not stored in Db (used by recipe for ingredient quantity)
         self.unit = Units()
         self.qtItem = []  #not stored in Db
         self.__dict__.update(attrs)
 
-        if self.fullCreation:
-            self.detectMatchNames(self.fullCreation)
+        # if self.fullCreation:
+        #     self.detectMatchNames(self.fullCreation)
 
     def detectMatchNames(self, processCategory=True):
-        """clean"""
-        mn = []
-        for item in self.match_name:
-            item = item.strip()
-            if item == '' or len(item) == 1:
-                continue
-            mn.append(item)
-        self.match_name = mn
-
-        """add"""
-        if self.category is not None and processCategory is True:
-            cat = [x for x in self.category]
-        else:
-            cat = []
-        if self.family is not None:
-            fam = [x for x in self.family]
-        else:
-            fam = []
-        if self.match_name is not None:
-            match = [x for x in self.match_name]
-        else:
-            match = []
-        for item in [self.name] + cat + fam + match:
-            item = item.strip()
-            if item == '':
-                continue
-            if item not in self.match_name:
-                self.match_name.append(item)
-            if unidecode(item).strip() not in self.match_name:
-                self.match_name.append(unidecode(item).strip())
+        """
+        TODO categories comes as integer > need correspondance to category name
+        :param processCategory:
+        :return:
+        """
+        self.match_name = self.db_match_name + self.db_lazy_match_name
+        # """clean"""
+        # mn = []
+        # for item in self.match_name:
+        #     item = item.strip()
+        #     if item == '' or len(item) == 1:
+        #         continue
+        #     mn.append(item)
+        # self.match_name = mn
+        #
+        # """add"""
+        # if self.category is not None and processCategory is True:
+        #     cat = [x for x in self.category]
+        # else:
+        #     cat = []
+        # if self.match_name is not None:
+        #     match = [x for x in self.match_name]
+        # else:
+        #     match = []
+        # for item in [self.name] + cat + match:
+        #     if isinstance(item, str):
+        #         item = item.strip()
+        #     if item == '':
+        #         continue
+        #     if item not in self.match_name:
+        #         self.match_name.append(item)
+        #     if unidecode(item).strip() not in self.match_name:
+        #         self.match_name.append(unidecode(item).strip())
 
     def conformAttrs(self, attrs):
+        print('----->> conforming attributes')
         attrs = removeNans(attrs)
         for key in attrs:
             if key in ['id']:
                 attrs[key] = int(attrs[key])
-            elif key in ['family', 'category', 'match_name']:
+            elif key in ['family', 'db_category_id', 'db_match_name', 'db_lazy_match_name']:
                 attrs[key] = splitValueToList(attrs[key])
-            elif key in ['visible', 'local', 'vegan', 'vegetarian', 'meat_replacement', 'always_available', 'special']:
+            elif key in ['local', 'meat_replacement']:
                 attrs[key] = bool(attrs[key])
+
+            print(key, type(attrs[key]), attrs[key])
         return attrs
 
     def __repr__(self):
@@ -375,7 +407,7 @@ class IngredientList:
             # if attrs['ingredients'] is not None:
             #     attrs['ingredients'] = convertIngredientIdToObj(path, attrs['ingredients'])
             ingredientObj = Ingredient(attrs, False)
-            ingredientObj.categoryId = ingredientObj.category
+            ingredientObj.categoryId = deepcopy(ingredientObj.db_category_id)
             ingredientList.append(ingredientObj)
             # ingredientDic[ingredientObj.name] = ingredientObj
 
@@ -383,13 +415,27 @@ class IngredientList:
 
     def conformCategories(self):
         for ingredientObj in self.ingredientList:
-            ingredientObj.categoryId = ingredientObj.category
-            #returns list of names from object id
-            ingredientObj.category = [x.name for x in self.ingredientList if x.id in ingredientObj.categoryId]
-            # print(ingredientObj.name, ingredientObj.categoryId, ingredientObj.category)
+            # print(ingredientObj.categoryId, ingredientObj.category, ingredientObj.db_category_id)
+            if ingredientObj.db_category_id is None:
+                ingredientObj.category = []
+            else:
+                # ingredientObj.categoryId = deepcopy(ingredientObj.db_category_id)
+                #returns list of names from object id
+                ingredientObj.category = [x.name for x in self.ingredientList if x.id in ingredientObj.db_category_id]
+                # print(ingredientObj.name, ingredientObj.categoryId, ingredientObj.category)
 
             # TODO add category to ingredients matchname
-            ingredientObj.detectMatchNames()
+            # ingredientObj.detectMatchNames()
+
+    # def conformCategories(self):
+    #     for ingredientObj in self.ingredientList:
+    #         ingredientObj.categoryId = ingredientObj.category
+    #         # returns list of names from object id
+    #         ingredientObj.category = [x.name for x in self.ingredientList if x.id in ingredientObj.categoryId]
+    #         # print(ingredientObj.name, ingredientObj.categoryId, ingredientObj.category)
+    #
+    #         # TODO add category to ingredients matchname
+    #         ingredientObj.detectMatchNames()
 
     def buildIngredientTree(self):
 
@@ -434,7 +480,7 @@ class IngredientList:
                 parent = [x.treeNode for x in self.ingredientList if x.id in ingredientObj.categoryId]
             else:
                 nodes = [meatNode, vegetableNode, starchNode, otherNode]
-                titles = ['viande', 'légume', 'féculent', 'divers']
+                titles = ['meat', 'vegetable', 'starch', 'other']
                 parent = [nodes[titles.index(x)] for x in ingredientObj.family]
             ingredientObj.treeNode.parents = parent
 
@@ -447,8 +493,20 @@ class IngredientList:
     def returnTreeAsList(self):
         return [node for node in preorder_iter(self.ingredientTree)]
 
-    def returnCategories(self):
-        pass
+    def getObjectById(self, id):
+        for ingredientObj in self.ingredientList:
+            if ingredientObj.id == id:
+                return ingredientObj
+        return None
+
+    def getParentCategoryObj(self, ingredientObj):
+        objCategory = []
+        for category in ingredientObj.db_category_id:
+            id = self.getObjectById(category)
+            if id is None:
+                raise Warning(f'No Matching id found for category: {category}')
+            objCategory.append(id)
+        return objCategory
 
     def filterIngredients(self, filterText):
         filterText = filterText.strip()
@@ -502,8 +560,8 @@ class IngredientList:
     def exportDatasToDb(self, datas):
         # print(f'\n\n-->> export inputs: {datas}')
         ingredientObj = Ingredient(datas, True)
-        ingredientObjTmp = Ingredient({'name':ingredientObj.name})
-        ingredientObjTmp = copyIngredientObj(ingredientObjTmp, ingredientObj)
+        # ingredientObjTmp = Ingredient({'name':ingredientObj.name})
+        ingredientObjTmp = copyIngredientObj(ingredientObj)
         if self.db is None:
             self.db = database.DB(self.path)
         if ingredientObj.id in [None, -1]:
@@ -514,6 +572,7 @@ class IngredientList:
             self.db.editIngredient(ingredientObj)
 
     def reprocessMatchNames(self):
+        #TODO OLD : need recode
         self.db.backup()
         self.db.backupDB = False
         for ingredientObj in self.ingredientList:
@@ -614,7 +673,7 @@ class Recipe:
                 if ingredient in [[], None, '']:
                     continue
                 return True
-            if ingredient.special is True:
+            if ingredient.availability > 2:
                 return True
         return False
 
@@ -670,19 +729,11 @@ class Recipe:
             ingredientObjTmp = Ingredient(attrs, False)
             return ingredientObjTmp
 
-        # def copyIngredientObj(ingredientObjTmp, ingredientObj):
-        #     for attr in ingredientObjTmp.__dict__.keys():
-        #         if attr in ['size', 'qtItem']:
-        #             continue
-        #         ingredientObjTmp.__dict__[attr] = ingredientObj.__dict__[attr]
-        #     print('copy out : ', ingredientObjTmp.__dict__)
-        #     return ingredientObjTmp
-
         def matchIngredientsById(ingredientObjTmp, ingredientList):
             for ingredientObj in ingredientList:
                 if ingredientObjTmp.id == ingredientObj.id:
                     # newIngredientObj = copy.deepcopy(ingredientObj)
-                    newIngredientObj = copyIngredientObj(ingredientObjTmp, ingredientObj)
+                    newIngredientObj = copyIngredientObj(ingredientObj, ingredientObjTmp)
                     # newIngredientObj.size = ingredientObjTmp.size
                     return True, newIngredientObj
             return False, ingredientObjTmp
@@ -691,7 +742,7 @@ class Recipe:
             for ingredientObj in ingredientList:
                 if ingredientObjTmp.name in ingredientObj.match_name:
                     # newIngredientObj = copy.deepcopy(ingredientObj)
-                    newIngredientObj = copyIngredientObj(ingredientObjTmp, ingredientObj)
+                    newIngredientObj = copyIngredientObj(ingredientObj, ingredientObjTmp)
                     # if ingredientObjTmp.size != 0:
                     #     newIngredientObj.size = ingredientObjTmp.size
                     return True, newIngredientObj
@@ -930,7 +981,7 @@ class RecipeList:
         filters['ingredients']
         """
         search = {}
-        if self.recipeTypes[filters['recipeType']] is not 'All':
+        if self.recipeTypes[filters['recipeType']] != 'All':
             search['type'] = [self.recipeTypes[filters['recipeType']], False, False]
         else:
             # search['type'] = [self.recipeTypes[1:], False, False]

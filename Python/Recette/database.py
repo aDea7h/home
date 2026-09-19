@@ -1,5 +1,5 @@
 import sqlite3
-from incrementalBackup import incrementalBackup
+from Python.incrementalBackup import incrementalBackup
 
 
 # Sql Datatypes:
@@ -342,9 +342,12 @@ class DB:
     # INGREDIENTS Table
     ###############
 
-    def getIngredientFromId(self, id):
-        sqlQuery = """SELECT rowid * from ingredients WHERE rowid = {}""".format(id)
-        self.executeQuery(sqlQuery, True)
+    def getIngredientFromId(self, objId):
+        sqlQuery = """SELECT rowid, * FROM ingredients WHERE rowid = '{}'""".format(objId)
+        self.executeQuery(sqlQuery, False)
+        items = self.cursor.fetchall()
+        self.commit()
+        return items
 
     def get_ingredients(self):
         sqlQuery = """SELECT rowid, * FROM ingredients"""
@@ -391,9 +394,13 @@ class DB:
     # RECIPES Table
     ###############
 
-    def getRecipeFromId(self, id):
-        sqlQuery = """SELECT rowid * from recipes WHERE rowid = {}""".format(id)
-        self.executeQuery(sqlQuery, True)
+    def getRecipeFromId(self, objId):
+        sqlQuery = """SELECT rowid, * FROM recipes WHERE rowid = '{}'""".format(objId)
+        self.executeQuery(sqlQuery, False)
+        items = self.cursor.fetchall()
+        self.commit()
+        return items
+
 
     def get_recipes(self):
         sqlQuery = """SELECT rowid, * FROM recipes"""

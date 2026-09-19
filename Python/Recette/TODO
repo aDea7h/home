@@ -2,9 +2,11 @@
 Qt to Android Tuto
 https://www.qt.io/blog/taking-qt-for-python-to-android
 
+
 db: switch all to db and DB class!
 db: addingredient a finir (manage categories)
 db: check data before import
+db: ne pas creer une db a chaque appel > global ?
 
 ui: crockpot mode : quick recette
 ui: quick add stock ui
@@ -40,6 +42,7 @@ ingredient: add aisle to obj and db
 ingredient: remove RecetteUI.units > use Recette Units instead
 ingredient: local et de saison
     ingredient: nesting under categories
+ingredient: nest recipe under each ingredient
 
 ingredientContent: bug de changement de nom sur le match name
 
@@ -131,11 +134,16 @@ tarte jambon ytomate creme moutarde herbe de provence
 tarte aubergine pesto
 burger
 sandwich
+lapin au pruneau
 
 vege pois casses menthe curry gout bobun
 gratin de pates
 panade
 galette des rois
+
+haricot blanc a la tomate
+galette de legumes
+maki
 
 
 

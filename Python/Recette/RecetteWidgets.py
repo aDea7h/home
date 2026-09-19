@@ -138,9 +138,10 @@ class MatchNameWidget(QtWidgets.QWidget):
 
 
 class IngredientWidgetUiSetup(QtWidgets.QWidget):
-    def __init__(self, ui, *args, **kwargs):
+    def __init__(self, outer, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.ui = ui
+        self.outer = outer
+        self.ui = self.outer.ui
         self.layout = QtWidgets.QVBoxLayout()
         self.setLayout(self.layout)
 
@@ -449,9 +450,9 @@ class GroceriesWidgetUiSetup(QtWidgets.QWidget):
 
     def splitIngredientsToAisle(self, ingredientList):
         for ingredient in ingredientList:
-            if ingredient.special is True:
+            if ingredient.availability == 3:
                 self.aisles['Special'].append(ingredient)
-            elif ingredient.always_available is True:
+            elif ingredient.availability == 1 :
                 self.aisles['Always Available - to check'].append(ingredient)
             elif ingredient.aisle is not None:
                 if ingredient.aisle in self.aisles.keys():

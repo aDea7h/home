@@ -2,6 +2,7 @@ from copy import deepcopy
 
 import Recette
 import database
+import Python.tools as tools
 
 def reprocessLazyMatchName(ingredientObj):
     # print(ingredientObj, 'reprocessLazyMatchName', type(ingredientObj))
@@ -110,7 +111,104 @@ def categoryFromMatchName(file):
         if edit is True:
             db.editIngredient(ingredient)
 
-file = '/home/adeath/Scripts/Recette/recipe_database.db'
+def getRecipe(file):
+    ingredientsdb = Recette.RecipeList(file)
+    # db = database.DB(file)
+    return ingredientsdb
+
+
+def filterRecipe2(recipeList, filters): # < USED !!
+    """
+    filters['recipeType']
+    filters['recipeMatchName']
+    filters['doFilterIngredients']
+    filters['ingredients']
+    """
+    def setupSearchPattern():
+        search = {}
+        # if self.recipeTypes[filters['recipeType']] != 'All':
+        #     search['type'] = [self.recipeTypes[filters['recipeType']], False, False]
+        # else:
+        #     # search['type'] = [self.recipeTypes[1:], False, False]
+        #     pass
+        if 'recipeMatchName' in filters.keys():
+            if filters['recipeMatchName'] != '':
+                search['match_name'] = [filters['recipeMatchName'], False, True]
+            else:
+                pass
+        print(filters['doFilterIngredients'], filters['ingredients'])
+        if filters['doFilterIngredients'] and filters['ingredients'] != []:
+            print('ingredients will be searched')
+            search['ingredients'] = [filters['ingredients'], False, True]
+        else:
+            pass
+        return search
+
+    search = setupSearchPattern()
+    search_class = tools.Search(flag='unidecode')
+    print(f'-->> Recipe Search Launch : {search}')
+    #searches = {'attr': ['searchedStr', exclusionOverride, result], }
+    for recipeObj in recipeList:
+        if 'searches' not in recipeObj.__dict__.keys():
+            if search == {}:
+                recipeObj.searches = search_class.newSearchInObj(recipeObj, {})
+                recipeObj.searches.result = 1
+            else:
+                recipeObj.searches = search_class.newSearchInObj(recipeObj, search)
+        else:
+            if search == {}:
+                recipeObj.searches.result = 1
+            else:
+                recipeObj.searches.search(search, True)
+        result = recipeObj.searches.result == 1
+        #ie : searches = {'attr': ['searchedStr', bool exclusionOverride, split, ('objAttrName')], ...}
+        print(f'recipe result: {recipeObj.searches} : {recipeObj.searches.result} // {recipeObj.searches.allSearches}')
+
+file = '/home/adeath/Work/Scripts/Python/Recette/recipe_database.db'
 # reprocess_match_name(file)
 # ingFamily(file)
-categoryFromMatchName(file)
+# categoryFromMatchName(file)
+
+
+
+prefs = Recette.Preferences(file)
+recipedb = getRecipe(file)
+recipes = []
+for recipe in recipedb.recipeList:
+    if recipe.name != 'ajiaco':
+        continue
+    print(recipe, recipe.ingredients)
+    recipes.append(recipe)
+    for ing in recipe.ingredients:
+        print(ing, ing.name)
+
+# # SETUP Filters
+# print('---------------------->>')
+# ingredients = []
+# # ing0 = Recette.Ingredient(attrs={'name': 'poulet'})
+# # print(ing0, ing0.name, ing0.match_name)
+# ingredients.append('sucre')
+# ingredients.append('canard')
+#
+# filters = {}
+# #filters['recipeMatchName'] = ['aji']
+# filters['doFilterIngredients'] = True
+# filters['ingredients'] = [(x, 'match_name') for x in ingredients]
+# print(filters)
+# print('---------------------->>')
+# #SETUP END
+#
+# filterRecipe2(recipes, filters)
+#
+# # ing0 = Recette.Ingredient(attrs={'name': 'poulet'})
+# # print(ing0, 'laal', type(ing0).__name__)
+
+import database
+import Recette
+
+prefs = Recette.Preferences(file)
+db = database.DB(prefs.path)
+data = db.getIngredientFromId(38)
+#data = db.getIngredientFromId(str(1))
+print('#############')
+print(data)

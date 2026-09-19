@@ -15,13 +15,13 @@ import sys
 from copy import deepcopy
 
 import pandas
-import odf
+# import odf
 import time
-import numpy as np
+#import numpy as np
 from unidecode import unidecode
-import tools
+import Python.tools as tools
 import database
-from incrementalBackup import incrementalBackup
+from Python.incrementalBackup import incrementalBackup
 from collections import defaultdict
 from bigtree import DAGNode, find, preorder_iter
 import copy
@@ -115,25 +115,57 @@ def attrListToAttrDict(attrList, objType):
         raise Exception("Unknown Attribute list type")
     return attrs
 
-def convertIngredientIdToObj(path, ingredients): #TODO
+def convertIdToObj(objType, objId):
+    if objId < 0:
+        raise Exception("Invalid ID {} : existing Ingredients have positive indexes".format(objId))
+    db = database.DB(prefs.path)
+    if objType == 'Ingredient':
+        print('recovering obj from id', objId)
+        data = db.getIngredientFromId(objId)
+        print(data)
+        attrs = attrListToAttrDict(data[0], objType)
+        obj = Ingredient(attrs)
+    elif objType == 'Recipe':
+        data = db.getRecipeFromId(objId)
+        attrs = attrListToAttrDict(data[0], objType)
+        obj = Recipe(attrs)
+    else:
+        raise Exception(f"Unknown type for {objType}.{objId}")
+    print(obj)
+    return obj
+
+
+def convertIngredientIdToObj(ingredients): #TODO
+    """
+    Takes ingredients = str([Ingredient.3, Recipe.5])
+    Takes ingredients = None
+    Takes ingredients = 'ingredient inconnu'
+    """
     ingredientList = []
     print(ingredients)
-    ingredients = eval(ingredients) ### Ingredients were stored in str([ing, ing])
+    if ingredients is None:
+        return None
+    if isinstance(ingredients, str):
+        if ingredients.startswith('[') and ingredients.endswith(']'):
+            ingredients = eval(ingredients)
+        else:
+            ingredients = [f'{ingredients}.-1']
     for ingredient in ingredients:
-        className, id = ingredient.split('.')
-        id = int(id)
+        className, objId = ingredient.split('.')
+        objId = int(objId)
         #TODO retrieve content from id
         attrs = {}
-        if className == 'Ingredient':
-            data = database.getIngredientFromId(path, id)
-            attrs = attrListToAttrDict(data, className)
-            obj = Ingredient(attrs)
-        elif className == 'Recipe':
-            data = database.getRecipeFromId(path, id)
-            attrs = attrListToAttrDict(data, className)
-            obj = Recipe(attrs)
-        else:
-            raise Exception("Unknown ingredient stored {}.{}".format(ingredient, ingredient.name))
+        # if className == 'Ingredient':
+        #     data = database.getIngredientFromId(path, id)
+        #     attrs = attrListToAttrDict(data, className)
+        #     obj = Ingredient(attrs)
+        # elif className == 'Recipe':
+        #     data = database.getRecipeFromId(path, id)
+        #     attrs = attrListToAttrDict(data, className)
+        #     obj = Recipe(attrs)
+        # else:
+        #     raise Exception("Unknown ingredient stored {}.{}".format(ingredient, ingredient.name))
+        obj = convertIdToObj(prefs.path, className, objId)
         print('recreated ingredient:')
         print(obj.__dict__())
         ingredientList.append(obj)
@@ -196,12 +228,13 @@ def copyIngredientObj(ingredientObj, ingredientObjTmp=None):
         attrs = {
             'name': deepcopy(ingredientObj.name),
         }
-        ingredientObjTmp = Ingredient(attrs, False)
+        ingredientObjTmp = Ingredient(attrs)
     for attr in ingredientObjTmp.__dict__.keys():
-        if attr in ['size', 'qtItem']:
+        if attr in ['size', 'qtItem', 'treeNode']:
             continue
+        print(f'copying attr {attr} from obj')
         ingredientObjTmp.__dict__[attr] = deepcopy(ingredientObj.__dict__[attr])
-    # print('copy out : ', ingredientObjTmp.__dict__)
+    print('copy out : ', ingredientObjTmp.__dict__)
     return ingredientObjTmp
 
 def copyRecipeObj(recipeObj):
@@ -214,7 +247,7 @@ def copyRecipeObj(recipeObj):
         recipeObjTmp.__dict__[attr] = deepcopy(recipeObj.__dict__[attr])
     ingredientList = []
     for ingredient in recipeObj.ingredients:
-        # ingredientObjTmp = Ingredient({'name': ingredient.name}, False)
+        # ingredientObjTmp = Ingredient({'name': ingredient.name})
         ingredientList.append(copyIngredientObj(ingredient))
     recipeObjTmp.ingredients = ingredientList
     print('copy out : ', recipeObjTmp.__dict__)
@@ -234,6 +267,7 @@ class Preferences:
     def __init__(self, libPath):
         global prefs
         prefs = self
+        self.path = libPath
         pathExists = os.path.exists(libPath)
         db = database.DB(libPath)
         if pathExists is False:
@@ -260,7 +294,7 @@ class Preferences:
 
 
 class Ingredient:
-    def __init__(self, attrs, fullCreation=True):
+    def __init__(self, attrs):
         self.id = -1
         self.name = None
         self.category = None
@@ -272,34 +306,39 @@ class Ingredient:
         self.vegan = None
         self.meat_replacement = None
         self.protein = None
-        self.availability = 3
+        self.availability = 3  # (AlwaysAvailable, available check quantity, to shop, hard to find / unknown)
         self.season = None
         self.local = False
-
 
         #additional attrs for ui funcs
         self.is_bought = False
         self.aisle = None
-        self.fullCreation = fullCreation
-
-        attrs = self.conformAttrs(attrs)
-
         # self.nutritional_value = None  # lipids / glucids / vitamins / iron...
         self.size = 0  # not stored in Db (used by recipe for ingredient quantity)
         self.unit = Units()
         self.qtItem = []  #not stored in Db
+
+
+        #initialise obj
+        attrs = self.conformAttrs(attrs)
         self.__dict__.update(attrs)
+        self.match_name = self.db_match_name + self.db_lazy_match_name
+        ####TEMP TODO
+        if not self.name in self.match_name:
+            self.match_name.append(self.name)
+            self.match_name.append(unidecode(self.name))
+            if self.family not in [None, []]:
+                print(self.family)
+                self.match_name.extend(self.family)
+                self.match_name.append(unidecode(' '.join(self.family)))
 
-        # if self.fullCreation:
-        #     self.detectMatchNames(self.fullCreation)
-
-    def detectMatchNames(self, processCategory=True):
+    # def detectMatchNames(self, processCategory=True):
         """
         TODO categories comes as integer > need correspondance to category name
         :param processCategory:
         :return:
         """
-        self.match_name = self.db_match_name + self.db_lazy_match_name
+        # self.match_name = self.db_match_name + self.db_lazy_match_name
         # """clean"""
         # mn = []
         # for item in self.match_name:
@@ -329,7 +368,7 @@ class Ingredient:
         #         self.match_name.append(unidecode(item).strip())
 
     def conformAttrs(self, attrs):
-        print('----->> conforming attributes')
+        print('----->> conforming incomming attributes')
         attrs = removeNans(attrs)
         for key in attrs:
             if key in ['id']:
@@ -340,6 +379,13 @@ class Ingredient:
                 attrs[key] = bool(attrs[key])
 
             print(key, type(attrs[key]), attrs[key])
+
+        #conform ingredient created with id without name
+        if 'id' in attrs and not 'name' in attrs:
+            print(f'#### need name conformation from id {attrs["id"]}')
+            retrievedObj = convertIdToObj('Ingredient', attrs["id"])
+            attrs['name'] = retrievedObj.name
+
         return attrs
 
     def __repr__(self):
@@ -384,7 +430,7 @@ class IngredientList:
             attrs = {}
             for col in data.columns:
                 attrs[col] = data.at[i, col]
-            ingredientObj = Ingredient(attrs, False)
+            ingredientObj = Ingredient(attrs)
             ingredientObj.categoryId = ingredientObj.category
             ingredientList.append(ingredientObj)
             # ingredientDic[ingredientObj.name] = ingredientObj
@@ -406,7 +452,7 @@ class IngredientList:
             #TODO Conform data
             # if attrs['ingredients'] is not None:
             #     attrs['ingredients'] = convertIngredientIdToObj(path, attrs['ingredients'])
-            ingredientObj = Ingredient(attrs, False)
+            ingredientObj = Ingredient(attrs)
             ingredientObj.categoryId = deepcopy(ingredientObj.db_category_id)
             ingredientList.append(ingredientObj)
             # ingredientDic[ingredientObj.name] = ingredientObj
@@ -462,10 +508,10 @@ class IngredientList:
         #path = ['viande', 'mouton', 'mergez']
 
         rootNode = DAGNode('root', id=-1, obj=None)
-        meatNode = DAGNode('meat', parents=[rootNode], id=-2, obj=Ingredient({'name': 'meat'}, False))
-        vegetableNode = DAGNode('vegetable', parents=[rootNode], id=-3, obj=Ingredient({'name': 'vegetable'}, False))
-        starchNode = DAGNode('starch', parents=[rootNode], id=-4, obj=Ingredient({'name': 'starch'}, False))
-        otherNode = DAGNode('other', parents=[rootNode], id=-5, obj=Ingredient({'name': 'other'}, False))
+        meatNode = DAGNode('meat', parents=[rootNode], id=-2, obj=Ingredient({'name': 'meat'}))
+        vegetableNode = DAGNode('vegetable', parents=[rootNode], id=-3, obj=Ingredient({'name': 'vegetable'}))
+        starchNode = DAGNode('starch', parents=[rootNode], id=-4, obj=Ingredient({'name': 'starch'}))
+        otherNode = DAGNode('other', parents=[rootNode], id=-5, obj=Ingredient({'name': 'other'}))
         self.ingredientTree = rootNode
         # print('---->> ingredientObj creation')
         for ingredientObj in self.ingredientList:
@@ -508,8 +554,9 @@ class IngredientList:
             objCategory.append(id)
         return objCategory
 
-    def filterIngredients(self, filterText):
-        filterText = filterText.strip()
+    def filterIngredients(self, filters):
+        # Old Method
+        filterText = filters.strip()
         method = 1
         if method == 0:
             matchList = self.Search.matchEachItemToWholeSearch(self.ingredientList, filterText, True, 'match_name')
@@ -519,6 +566,7 @@ class IngredientList:
             print(f'-->> Ingredient Search Launch : {search}')
             # searches = {'attr': ['searchedStr', exclusionOverride, result], }
             for ingredientObj in self.ingredientList:
+                # print(f'------>> New IngredientObj: {ingredientObj}: {ingredientObj.match_name}')
                 if 'searches' not in ingredientObj.__dict__.keys():
                     if search == {}:
                         ingredientObj.searches = self.Search.newSearchInObj(ingredientObj, {})
@@ -532,10 +580,43 @@ class IngredientList:
                         ingredientObj.searches.search(search, True)
                 result = ingredientObj.searches.result == 1
                 # ie : searches = {'attr': ['searchedStr', bool exclusionOverride, split, ('objAttrName')], ...}
-                print(f'------>> recipe result: {ingredientObj.searches} : {ingredientObj.searches.result} // {ingredientObj.searches.allSearches}')
+                print(f'------>> ingredient result: {ingredientObj.name} : {ingredientObj.searches.result} // {ingredientObj.searches.allSearches}')
                 matchList.append([ingredientObj, result])
 
         return matchList
+
+
+        # """
+        # filters['ingredientMatchName']
+        # """
+        #
+        # def setupSearchPattern():
+        #     search = {}
+        #     if filters['ingredientMatchName'] != '':
+        #         search['match_name'] = [filters['ingredientMatchName'], False, True]
+        #     else:
+        #         pass
+        #     return search
+        #
+        # search = setupSearchPattern()
+        # print(f'-->> Ingredient Search Launch : {search}')
+        # # searches = {'attr': ['searchedStr', exclusionOverride, result], }
+        # for ingredientObj in self.ingredientList:
+        #     if 'searches' not in ingredientObj.__dict__.keys():
+        #         if search == {}:
+        #             ingredientObj.searches = self.Search.newSearchInObj(ingredientObj, {})
+        #             ingredientObj.searches.result = 1
+        #         else:
+        #             ingredientObj.searches = self.Search.newSearchInObj(ingredientObj, search)
+        #     else:
+        #         if search == {}:
+        #             ingredientObj.searches.result = 1
+        #         else:
+        #             ingredientObj.searches.search(search, True)
+        #     result = ingredientObj.searches.result == 1
+        #     # ie : searches = {'attr': ['searchedStr', bool exclusionOverride, split, ('objAttrName')], ...}
+        #     print(
+        #         f'ingredient result: {ingredientObj.searches} : {ingredientObj.searches.result} // {ingredientObj.searches.allSearches}')
 
     def importDataFromFile(self, odsPath):
         ingredientList = self.readOds(odsPath)
@@ -559,7 +640,7 @@ class IngredientList:
 
     def exportDatasToDb(self, datas):
         # print(f'\n\n-->> export inputs: {datas}')
-        ingredientObj = Ingredient(datas, True)
+        ingredientObj = Ingredient(datas)
         # ingredientObjTmp = Ingredient({'name':ingredientObj.name})
         ingredientObjTmp = copyIngredientObj(ingredientObj)
         if self.db is None:
@@ -726,7 +807,7 @@ class Recipe:
             attrs = {'id': id,
                     'name': name,
                     'size': size, }
-            ingredientObjTmp = Ingredient(attrs, False)
+            ingredientObjTmp = Ingredient(attrs)
             return ingredientObjTmp
 
         def matchIngredientsById(ingredientObjTmp, ingredientList):
@@ -766,7 +847,7 @@ class Recipe:
                 found, ingredientObj = matchIngredientsByString(ingredientObjTmp, ingredientList)
             if found is False:
                 print('--> Ingredient not Found : ' + ingredientObj.name, ingredientObj)
-                ingredientObj.special = True
+                ingredientObj.availability = 3
                 self.error = True
             self.ingredients[idx] = ingredientObj
             print('--> ingredient added:', ingredientObj.name, ingredientObj.size)
@@ -819,8 +900,8 @@ class RecipeList:
         self.ingredientList = ingredientList
         self.Search = tools.Search(flag='unidecode')
         self.recipeTypes = ['All', 'Starter', 'Dish', 'Dessert', 'Sauce', 'Picnic', 'Soup']
-        if self.checkIngredient is True and self.ingredientList is []:
-            self.ingredientList = IngredientList().ingredientList
+        if self.checkIngredient is True and self.ingredientList == []:
+            self.ingredientList = IngredientList(self.path).ingredientList
         if path in ['', None]:
             return
         if path[-4:] == ".ods":
@@ -949,56 +1030,70 @@ class RecipeList:
         print("done")
         return recipeObj
 
-    def filterRecipe(self, filterText, items=[], attr='match_name'):
-        if items == []:
-            items = self.recipeList
-        if isinstance(filterText, str):
-            filterText = filterText.strip()
-        matchList = self.Search.matchEachItemToWholeSearch(items, filterText, True, attr)
-        # print([(obj.name, match) for obj, match in matchList])
-        return matchList
+    # def filterRecipe(self, filterText, items=[], attr='match_name'):
+    #     if items == []:
+    #         items = self.recipeList
+    #     if isinstance(filterText, str):
+    #         filterText = filterText.strip()
+    #     matchList = self.Search.matchEachItemToWholeSearch(items, filterText, True, attr)
+    #     # print([(obj.name, match) for obj, match in matchList])
+    #     return matchList
 
-    def filterRecipeIngredients(self, ingredientList, recipeList):
-        filterList = []
-        for recipeObj in recipeList:
-            recipeIngredientList = [x.name for x in recipeObj.ingredients]
-            matchList = self.Search.matchEachItemToWholeSearch(ingredientList, recipeIngredientList, True, 'match_name')
-            recipeMatch = False
-            for ingredient, match in matchList:
-                if match is True:
-                    recipeMatch = True
-                    print('found recipe', recipeObj.name, ingredient.name, recipeIngredientList, ingredient.match_name)
-                    break
-            filterList.append((recipeObj, recipeMatch))
-        print([(obj.name, recipeMatch) for obj, recipeMatch in filterList])
-        return filterList
+    # def filterRecipeIngredients(self, ingredientList, recipeList):
+    #     filterList = []
+    #     for recipeObj in recipeList:
+    #         recipeIngredientList = [x.name for x in recipeObj.ingredients]
+    #         matchList = self.Search.matchEachItemToWholeSearch(ingredientList, recipeIngredientList, True, 'match_name')
+    #         recipeMatch = False
+    #         for ingredient, match in matchList:
+    #             if match is True:
+    #                 recipeMatch = True
+    #                 print('found recipe', recipeObj.name, ingredient.name, recipeIngredientList, ingredient.match_name)
+    #                 break
+    #         filterList.append((recipeObj, recipeMatch))
+    #     print([(obj.name, recipeMatch) for obj, recipeMatch in filterList])
+    #     return filterList
 
-    def filterRecipe2(self, filters):
+    def filterRecipe2(self, filters): # < USED !!
         """
         filters['recipeType']
         filters['recipeMatchName']
         filters['doFilterIngredients']
         filters['ingredients']
         """
-        search = {}
-        if self.recipeTypes[filters['recipeType']] != 'All':
-            search['type'] = [self.recipeTypes[filters['recipeType']], False, False]
-        else:
-            # search['type'] = [self.recipeTypes[1:], False, False]
-            pass
-        if filters['recipeMatchName'] != '':
-            search['match_name'] = [filters['recipeMatchName'], False, True]
-        else:
-            pass
-        # print(filters['doFilterIngredients'], filters['ingredients'])
-        # if filters['doFilterIngredients'] and filters['ingredients'] != []:
-        #     search['ingredients'] = [filters['ingredients'], False, True]
-        # else:
-        #     pass
+        def setupSearchPattern():
+            search = {}
+            if self.recipeTypes[filters['recipeType']] != 'All':
+                search['type'] = [self.recipeTypes[filters['recipeType']], False, False]
+            else:
+                # search['type'] = [self.recipeTypes[1:], False, False]
+                pass
+            if filters['recipeMatchName'] != '':
+                search['match_name'] = [filters['recipeMatchName'], False, True]
+            else:
+                pass
+            print(filters['doFilterIngredients'], filters['ingredients'])
+            if filters['doFilterIngredients'] and filters['ingredients'] != []:
+                # search['ingredients'] = [filters['ingredients'], False, True]
+                search['ingredients'] = [[(x, 'name') for x in filters['ingredients']], False, True]
+            else:
+                pass
+            return search
 
+        search = setupSearchPattern()
         print(f'-->> Recipe Search Launch : {search}')
         #searches = {'attr': ['searchedStr', exclusionOverride, result], }
         for recipeObj in self.recipeList:
+            if recipeObj.name not in ['ajiaco', 'bobun']:
+                ###############################
+                ###############################
+                ###############################
+                ## BAD remove if
+                ###############################
+                recipeObj.searches = self.Search.newSearchInObj('toto', '')
+                recipeObj.searches.result = -1
+                continue
+                ###############################
             if 'searches' not in recipeObj.__dict__.keys():
                 if search == {}:
                     recipeObj.searches = self.Search.newSearchInObj(recipeObj, {})
@@ -1012,7 +1107,7 @@ class RecipeList:
                     recipeObj.searches.search(search, True)
             result = recipeObj.searches.result == 1
             #ie : searches = {'attr': ['searchedStr', bool exclusionOverride, split, ('objAttrName')], ...}
-            print(f'recipe result: {recipeObj.searches} : {recipeObj.searches.result} // {recipeObj.searches.allSearches}')
+            print(f'recipe result: {recipeObj.name} : {recipeObj.searches.result} // {recipeObj.searches.allSearches}')
 
     def reprocessMatchNames(self):
         self.db.backup()

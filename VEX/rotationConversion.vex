@@ -1,0 +1,8 @@
+//frequently used rotation conversions
+p@orient = quaternion(maketransform(zaxis,yaxis));//two axis to quaternion
+v@rotationPP = degrees(quaterniontoeuler(p@orient,0));//quaternion to degrees
+p@orient = quaternion(M3);//matrix3 to quaternion
+3@M3=qconvert(p@orient);//quaternion to matrix
+vector xaxis,yaxis,zaxis,up; //Matrix from Z axis and Up hint;
+makebasis(xaxis,yaxis, vector zaxis, vector u);
+matrix3 M3 = set(xaxis,yaxis,zaxis);

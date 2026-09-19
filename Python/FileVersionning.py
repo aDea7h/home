@@ -3,7 +3,7 @@ import os
 import shutil
 import json
 from stat import S_IREAD, S_IRGRP, S_IROTH, S_IWUSR
-import tools
+# import tools
 #reload(tools)
 
 # TODO
@@ -35,7 +35,7 @@ class Version:
 
         self.__dict__.update(attrs)
 
-        self.cprint = tools.CustomPrint(0, 0)
+        # self.cprint = tools.CustomPrint(0, 0)
 
         if self.date is None:
             self.date = localtime()
@@ -84,7 +84,7 @@ class Version:
         if os.path.isdir(json_path) is False:
             os.makedirs(json_path)
         json_path = os.path.join(json_path, self.comments_file)
-        self.cprint(json_path, 1)
+        print(json_path, 1)
         # content = ''
         comments = {}
         if os.path.exists(json_path) is True:
@@ -100,9 +100,9 @@ class Version:
         #     print(comments)
         # else:
         #     comments = {}
-        self.cprint(comments, 1, 'Comments')
+        print(comments, 1, 'Comments')
         comments[self.display_date] = self.comment_content()
-        self.cprint(comments, 1)
+        print(comments, 1)
         with open(json_path, 'w') as json_file:
             json.dump(comments, json_file)
             # json_file.close()

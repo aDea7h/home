@@ -1,11 +1,12 @@
-from PySide2 import QtGui, QtCore, QtWidgets
+# from PySide2 import QtGui, QtCore, QtWidgets
+from PySide6 import QtGui, QtCore, QtWidgets
 import hou
 import os
 from time import strptime
 
 import File
 import FileVersionning
-import tools
+# import tools
 # reload(FileVersionning)
 # reload(File)
 # reload(tools)
@@ -39,15 +40,15 @@ class ProjectManager(QtWidgets.QWidget):
             'bg_item_version': (73, 73, 73),
         }
 
-        self.cprint = tools.CustomPrint(0, 0)
+        # self.cprint = tools.CustomPrint(0, 0)
 
         font_title = QtGui.QFont()
-        font_title.setPointSize(250)
+        font_title.setPointSize(30) # 250
         font_title.setBold(True)
         self.ui_proj_name = QtWidgets.QComboBox()
         self.layout.addWidget(self.ui_proj_name)
         # self.proj_name.setScaledContents(True)
-        self.ui_proj_name.setMinimumHeight(50)
+        # self.ui_proj_name.setMinimumHeight(50)
         self.ui_proj_name.setFont(font_title)
 
         self.set_proj_button = QtWidgets.QPushButton('Set Project')
@@ -76,7 +77,7 @@ class ProjectManager(QtWidgets.QWidget):
 
         # Publish Tab
         self.publish_widget = QtWidgets.QWidget()
-        self.publish_tab = self.main_tabs.addTab(self.publish_widget, 'Publish')
+        # self.publish_tab = self.main_tabs.addTab(self.publish_widget, 'Publish')
         self.publishtab_layout = QtWidgets.QGridLayout()
         self.publish_widget.setLayout(self.publishtab_layout)
 
@@ -156,7 +157,11 @@ class ProjectManager(QtWidgets.QWidget):
             raise Exception('Error while setting project to {}'.format(path))
         self.proj_path = path
         self.proj_name = os.path.basename(self.proj_path)
-        hou.putenv('job', path)
+        # Update the JOB environment variable to the new location of your project
+        os.environ["JOB"] = path
+        # Allow the JOB variable to be overwritten
+        hou.allowEnvironmentToOverwriteVariable("JOB", True)
+        #hou.putenv('job', path)
         self.hou_env_in_ui()
         self.get_project_files()
 
@@ -190,7 +195,8 @@ class ProjectManager(QtWidgets.QWidget):
             qt_item.setForeground(column, brush)
 
     def set_item_background(self, qt_item, bg_color, column=None):
-        qt_item.setBackgroundColor(column, QtGui.QColor(bg_color[0], bg_color[1], bg_color[2]))
+        # qt_item.setBackgroundColor(column, QtGui.QColor(bg_color[0], bg_color[1], bg_color[2]))
+        qt_item.setBackground(column, QtGui.QColor(bg_color[0], bg_color[1], bg_color[2]))
 
     def create_version(self):
 
@@ -249,7 +255,7 @@ class ProjectManager(QtWidgets.QWidget):
                     parent = parent[1:]
                 else:
                     parent = scene_obj.name
-                self.cprint((scene_obj.name, parent), 1)
+                # self.cprint((scene_obj.name, parent), 1)
             return parent
 
         def recursive_tree(files_tree, main_scenes, type):
@@ -282,7 +288,7 @@ class ProjectManager(QtWidgets.QWidget):
                     scene_obj = files_tree[key]
 
                     # set parent_scene
-                    self.cprint((scene_obj.name, type, scene_obj.path), 0)
+                    # self.cprint((scene_obj.name, type, scene_obj.path), 0)
                     if type is None:
                         scene_obj.parent_scene = scene_obj.name
                     elif type == 'backup':
@@ -315,6 +321,8 @@ class ProjectManager(QtWidgets.QWidget):
             tops = []
             for obj in dic:
                 if isinstance(dic[obj], dict) is True:
+                    if obj == 'backup':
+                        continue
                     entry = [obj, '', '']
                     new_item = QtWidgets.QTreeWidgetItem(parent_item, entry)
                     self.set_item_background(new_item, self.style['bg_item_folder'], 1)
@@ -335,10 +343,10 @@ class ProjectManager(QtWidgets.QWidget):
 
     def retrieve_last_comment(self):
         version = self.create_version()
-        self.cprint((version.path, version.publish_folder, version.comments_file), 1)
+        # self.cprint((version.path, version.publish_folder, version.comments_file), 1)
         version.get_version_from_log()
 
-        self.cprint((version.comment, version.todo, version.done, version.version), 1)
+        # self.cprint((version.comment, version.todo, version.done, version.version), 1)
 
         self.comment_text.setText(version.comment)
         self.todo_text.setText(version.todo)

@@ -237,15 +237,18 @@ def autoComplete(stringSearched, autoCompletionList, splitWords=",", splitChars=
     #print(stringSearched, autoCompletionList, splitWords, splitChars)
     splitWords = stringSearched.split(splitWords)
     for word in splitWords:
-        print("------>> word : "+word)
+        if verbose >=1:
+            print("------>> word : "+word)
         word = word.strip()
         parts = word.split(splitChars)
         for objectTest in autoCompletionList:
-            print("-- testing : "+objectTest)
+            if verbose >= 1:
+                print("-- testing : "+objectTest)
             objectTest = str(objectTest)
             match = []
             for part in parts:
-                print("-part : "+part)
+                if verbose >= 1:
+                    print("-part : "+part)
                 exclusion = False
                 if len(part) >0 and part[0] == exclChar:
                     part = part[1:]
@@ -258,14 +261,16 @@ def autoComplete(stringSearched, autoCompletionList, splitWords=",", splitChars=
                         match = "skip"
                         break
                     else:
-                        print("Match apend")
+                        if verbose >= 1:
+                            print("Match apend")
                         match.append(searchResult)
                 else:
                     if exclusion == True:
                         continue
                     match.append(searchResult)
                     break
-            print(match)
+            if verbose >= 1:
+                print(match)
             if match  == "skip":
                 if verbose >=1:
                     print(" - match skipped : "+objectTest)
@@ -451,15 +456,57 @@ def matchItems(stringSearched, matchingPatternDic, splitChars="&&", exclChar="!=
 #         print('resultlist:', resultList)
 #         return resultList
 def searchText(pattern, text, flag=["unidecode", "ignoreCase"]):
+    #TODO return matching text span (retrieve original, with case and accents)
+    # BUG peut offsetter le resultat d'un (plus?) character ou non a cause des œ qui expand en oe
     """ OK
     Process de recherche de string a string
     peut ignoreCase et unidecode ou non. pas de partialMatch possible ici
     return True si match / None sinon
     utilisée par la class Search
     """
+    def matchToNonUnicodeText(textOrig, text, span):
+        """
+        # TODO : check if works chances are there are bugs ;)
+        With unidecode some single characters may expand to 2
+        ie :  œ expands to oe
+        """
+        offset = 0
+        maxOffset = len(text)-len(textOrig)
+        # print(maxOffset)
+        while offset < maxOffset:
+
+            #test first character (match with unidecode)
+            start = span[0]-offset
+            stop = span[1] - offset
+            print('inputs: ', textOrig, text, span)
+            print(f'offset : {offset}, start : {start}, stop : {stop}')
+            start = min(start, len(textOrig)-1)
+            print('start: ', start, ' stop: ', stop)
+
+            startChar = textOrig[start]
+            testStartChar = unidecode(startChar)
+            #test first character to match (with unicode expansion if needed)
+
+            if testStartChar == text[span[0]:span[0]+len(testStartChar)]:
+                # test match with unidecode
+                testUnidecode = unidecode(textOrig[start:stop])
+                if testUnidecode == text[span[0]:span[1]]:
+                    return textOrig[start:stop]
+                else:
+                    # mauvais debut, continuer d'offsetter
+                    pass
+            else:
+                #not same beggining character, continue
+                pass
+            offset += 1
+
+        matchingText = text[span[0]:span[1]]
+        return matchingText
+
     if not isinstance(text, str):
         text = str(text)
         warnings.warn('searchText() text should be a string (converted automatically)')
+    textOrig = text
     if 'unidecode' in flag:
         text = unidecode(text)
         pattern = unidecode(pattern)
@@ -467,10 +514,17 @@ def searchText(pattern, text, flag=["unidecode", "ignoreCase"]):
         result = re.search(pattern, text, flags=re.IGNORECASE)
     else:
         result = re.search(pattern, text)
-    customPrint([pattern, text, result], 1)
+    # customPrint([pattern, text, result, result.span(), len(text), len(textOrig)], 0)
     if result:
-        return True, result.span()
-    return None, None
+        if 'unidecode' in flag and len(text) != len(textOrig):
+            matchingText = matchToNonUnicodeText(textOrig, text, result.span())
+        else:
+
+            inout = result.span()
+            print(result.span(), result.span()[0], inout)
+            matchingText = textOrig[inout[0]:inout[1]]
+        return True, result.span(), matchingText
+    return None, None, None
 
 
 class SearchPart:
@@ -488,6 +542,7 @@ class SearchPart:
         """
         self.result = None  # [1 0 -1 None]
         self.span = None
+        self.matchingCharacters = None
         self.searchedPart = searchedPart
         self.textStack = textStack
         self.exclusion = exclusion
@@ -496,7 +551,7 @@ class SearchPart:
     def update(self, force=False):
         if self.result is None or force is True:
             # print(f'-- textStack : {self.textStack}')
-            result, self.span = searchText(self.searchedPart, self.textStack)
+            result, self.span, self.matchingCharacters = searchText(self.searchedPart, self.textStack)
             # print(result, self.searchedPart, self.textStack)
             if result is True:
                 if self.exclusion is True:
@@ -582,27 +637,46 @@ class Search:
             if type(self.stack).__name__ not in ['tuple', 'list']:
                 self.stack = [self.stack]
 
+            objectSearch = False
             for stackItem in self.stack:
+                print(f'##--->> Inside stackItem : {stackItem} loop')
                 if isinstance(stackItem, str):
+                    print('is string')
                     searchedStackList.append(stackItem)
                 else:
+                    #print(f'##--->> test length searchedPattern : {len(self.searchedPattern)}', len(self.searchedPattern) == 2)
+                    #conform search pattern to? TODO
+                    objectSearch = True
                     try:
-                        if len(stackItem) == 2: # is an object stored as (obj: obj, str: attribute)
+                        #if len(stackItem) == 2:
+                        if len(self.searchedPattern) == 2: # is an object stored as (obj: obj, str: attribute)
+                            print('##--->> found object search')
+                            print(stackItem.__dict__[self.searchedPattern[1]], self.searchedPattern[1])
                             try:
-                                attribute = stackItem[0].__dict__[stackItem[1]]
-                                if not isinstance(attribute, str):
-                                    warnings.warn("SearchPattern: searching inside an object attribute should be a string: implicit conversion")
+                                attribute = stackItem.__dict__[self.searchedPattern[1]]
+                                print('attribute : ', attribute, type(attribute))
+                                if type(attribute) == list:
+                                    searchedStackList.extend(attribute)
+                                elif type(attribute) == str:
+                                    searchedStackList.append(attribute)
+                                else:
+                                    warnings.warn("SearchPattern: searching inside an object attribute should be a string : implicit conversion")
+                                    print('attribute to string : ', attribute)
                                     attribute = str(attribute)
-                                searchedStackList.append(attribute)
+                                    searchedStackList.append(attribute)
+
                             except:
                                 warnings.warn(f'SearchPattern: unable to search into {stackItem}')
                         else:
                             warnings.warn(
                                 f'SearchPattern: searched stack should be a string or an (object, attribute) pair')
                     except:
+                        print('##--->> exception found here')
                         warnings.warn(f'SearchPattern: searched stack should be a string or an (object, attribute) pair')
 
             print(f'out self.searchedStackList : {searchedStackList}')
+            if objectSearch is True:
+                self.searchedPattern = self.searchedPattern[0]
             self.searchedStackList = searchedStackList
 
         def splitPatternToParts(self):
@@ -656,17 +730,23 @@ class Search:
                 reorderedList.extend(searchParts)
                 return reorderedList
 
+            print(f'-------->>>> splitPatternToParts input : {self.searchedPattern}')
             if isinstance(self.searchedPattern, str):  # crepes sucre !oeuf
                 searchParts = doSplitToParts()
+            elif isinstance(self.searchedPattern, list):  # soit [oeuf, crepes...] soit [('oeuf', True), ('crepes', False), ('sucre', False)]:
+                if len(self.searchedPattern[0]) == 2 and isinstance(self.searchedPattern[0][0], str) and isinstance(self.searchedPattern[0][1], bool):
+                    searchParts = self.searchedPattern
+                else: # [oeuf crepes]
+                    searchParts = partListProcess(self.searchedPattern)
+            elif type(self.searchedPattern).__name__ == 'Ingredient':
+                print('found ingredient object')
+                searchParts = [self.searchedPattern.name]
+                print(searchParts)
+                pass
             else:
-                if isinstance(self.searchedPattern, list):  # soit [oeuf, crepes...] soit [('oeuf', True), ('crepes', False), ('sucre', False)]
-                    if len(self.searchedPattern[0]) == 2 and isinstance(self.searchedPattern[0][0], str) and isinstance(self.searchedPattern[0][1], bool):
-                        searchParts = self.searchedPattern
-                    else: # [oeuf crepes]
-                        searchParts = partListProcess(self.searchedPattern)
-                else:
-                    warnings.warn(f"Wrong searchedPattern found : '{self.searchedPattern}'")
-                    return []
+                warnings.warn(f"Wrong searchedPattern found : '{self.searchedPattern}'")
+                print('Wrong searchedPattern found : ', self.searchedPattern)
+                return []
             self.searchParts = reorderSearchParts(searchParts)
 
         def search(self):
@@ -698,7 +778,7 @@ class Search:
                 result = oldMethodFalsePositive()
             elif switchMethod == 'wip':
                 """
-                pour caque elem de liste
+                pour chaque elem de liste
                     Pour chaque part                
                         faire la recherche
                         stocker le resultat positif dans une liste
@@ -822,6 +902,7 @@ class Search:
                     searchGroups = self.splitSearchPatternToGroups(searchPattern)
                 else:
                     searchGroups = [searchPattern]
+                print(f'{len(searchGroups)} searchGroups: {searchGroups}')
                 groupResults = []
                 for group in searchGroups:
                     groupSearchName = f'{attrSearch}.{int(exclusion)}.{int(split)}.{group}'
@@ -872,204 +953,205 @@ class Search:
 
 
 
-    class SearchValueInObjList:
-        def __init__(self, searches, obj, flag="unidecode", verbose=0):
-            """
-            Cette classe permet de faire une recherche dans un ou plusieurs attribut dans un seul objet
-            le resultat de chaque bout de recherche est stocke avec ses parametres
-            La recherche peut contenir des wildcard et un override d exclusion
-            ie : searches = {'attr': ['searchedStr', bool exclusionOverride], }
-            ie : searches = {'attr': [['searchedStr', 'searchStr2'], exclusionOverride], }
-            d autres pattern (autres instances de cette classe) serviront pour calculer le resultat de recherche final
-            1 exclusion annule toute la recherche
-            l'exclusion exclue que la part juxtaposee, et non tout !
-            """
-            self.searches = searches
-            self.searchedPartsList = None #[(searchedValue, bool(exclusion)), ...]
-            self.obj = obj
-            self.attr = attr
-            self.result = None
-            self.flag = flag  # ["unidecode", "ignoreCase", others = no flag]
-            # if self.flag == "unidecode":
-            #     from unidecode import unidecode
-            self.partialMatch = True
-            self.lazyWildcard = ' '
-            self.exclusionChar = '!'
-            self.exclusion = exclusion
-            self.splitItems = ','
-            self.verbose = verbose
-
-            if self.status == None:
-                self.breakToSearchParts()
-                self.searchElementInObjList()
-
-
-
-        class ObjSearchPartResult:
-            """
-            Stocker les parametres et le resultat de la recherche
-            Maj du result si omit a la creation possible ou si maj forcee
-            1 : resultat positif
-            0 : resultat negatif
-            -1: resultat exclus
-            None: pas de resultat
-            """
-            def __init__(self, attrNameValue, searchedPart, exclusion, result):
-                self.result = result  # [1 0 -1 None]
-                self.attrNameValue = attrNameValue
-                self.searchedPart = searchedPart
-                self.exclusion = exclusion
-
-            def update(self, force=False):
-                if self.result is None or force is True:
-                    # result = searchText(self.searchedPart, self.searchedObj.__dict__[self.attr])
-                    result = searchText(self.searchedPart, self.attrNameValue)
-                    if result is True:
-                        if self.exclusion is True:
-                            self.result = -1
-                        else:
-                            self.result = 1
-                    else:
-                        self.result = 0
-
-        class ObjSearchResult:
-            """
-            !!self.searchedPartList doit avoir les exclusions en debut de liste !!
-            Stocker le resultat d'un element ou resultat final de la recherche pour un objet
-            stocker les differents objsearchpartresult / objsearchresult ac les resultats
-            recomplier si besoin les resultat a partir d objet mis a jour
-            isElementSearch : if True one exclusion translates as whole object excluded
-            if False each result only adds positive results, exclusions are not taken to account
-            """
-            # TODO
-            def __init__(self, searchedObj, searchedPartList, resultList, isElementSearch):
-                self.searchedObj = searchedObj
-                self.searchedPartList = searchedPartList
-                self.resultList = resultList
-                self.isElementSearch = isElementSearch
-                self.result = None #[1, 0, None]
-
-            def update(self, force=False):
-                """ OK
-                Updates results
-                """
-                for result in self.resultList:
-                    result.update(force)
-
-            def addSearches(self, additionalSearchedPartList, additionalResultList):
-                #TODO
-                """
-                do search, reorder / append to searchPartList
-                append results
-                y a t il besoin d update les anciennes recherches ? update si compile un element, pas dupdate interelement
-                """
-                #reorder searchedPartList !!!
-                self.update(True)
-                return
-
-            def computeResults(self):
-                notProcessed = []
-                for resultItem in self.resultList:
-                    if self.isElementSearch:
-                        if resultItem.result == -1:
-                            self.result = 0
-                            break
-                    if resultItem.result == 0:
-                        notProcessed.append(resultItem)
-                    if resultItem.result == 1:
-                        self.result = 1
-                        break
-                if self.result not in [-1, 1] and len(notProcessed) != 0:
-                    for resultItem in notProcessed:
-                        resultItem.update()
-                    self.computeResults()
-
-                if self.result not in [-1, 1]:
-                    self.result = 0
-
-
-
-
-        def breakToSearchParts(self):
-            """ OK
-            Convertir la ElementSearch en parts et set des exclusions en premier
-            ie:
-            crepes sucre !oeuf -> [('oeuf', True), ('crepes', False), ('sucre', False)]
-            """
-            def doSplitToParts():
-                """
-                returns tupple list  [(searchedPart, exclusion), ...]
-                """
-                if isinstance(self.searchedString, str):
-                    itemParts = self.searchedString.split(self.lazyWildcard)
-                else:
-                    itemParts = self.searchedString
-                idx = 0
-                for item in itemParts:
-                    item = item.strip()
-                    exclusion = False
-                    if item.startswith(self.exclusionChar):
-                        item = item[1:]
-                        exclusion = True
-                    itemParts[idx] = (item, exclusion)
-                    idx += 1
-                return itemParts
-
-            def reorderSearchParts(searchParts):
-                """
-                reorder searchParts with exclusion parts first
-                """
-                reorderedList = []
-                for part in list(searchParts):
-                    if part[1] is False:
-                        reorderedList.append(part)
-                        searchParts.remove(part)
-                reorderedList.extend(searchParts)
-                return reorderedList
-
-            if isinstance(self.searchedString, str):
-                searchParts = doSplitToParts()
-            if isinstance(self.searchedString, list):
-                if len(self.searchedString[0]) and type(self.searchedString[0]).__name__ == 'str':
-                    searchParts = doSplitToParts()
-
-            searchParts = reorderSearchParts(searchParts)
-            self.searchedPartsList = searchParts
-
-        def searchElementInObjList(self):
-            # search text in list of text, a single exclusion match cancels everything
-            """
-            effectuer une recherche sur l'objet. stocker le resultat
-            True : match positif
-            0 : pas de match
-            False : match exclusion
-            None : recherche non effectuee
-            sets self.resultList to:
-            [ObjSearchPartResult(obj, part, result), ...]
-            """
-            resultList = []
-            resultState = None
-            for searchedPart in self.searchedPartsList:
-                exclusion = searchedPart[1]
-                if resultState == -1 or resultState == 1:
-                    resultObj = self.ObjSearchPartResult(searchedPart[0], self.obj, exclusion, None)
-                    resultList.append(resultObj)
-                    continue
-                result = searchText(searchedPart[0], self.obj.__dict__[self.attr])
-                if result is True:
-                    resultState = 1
-                    if exclusion is True: #exclusion de la part
-                        resultState = -1
-                else:
-                    resultState = 0
-                resultObj = self.ObjSearchPartResult(searchedPart[0], self.obj, exclusion, resultState)
-                resultList.append(resultObj)
-
-            self.result = self.ObjSearchResult(self.obj, self.searchedPartsList, resultList)
+    # class SearchValueInObjList:
+    #     def __init__(self, searches, obj, flag="unidecode", verbose=0):
+    #         """
+    #         Cette classe permet de faire une recherche dans un ou plusieurs attribut dans un seul objet
+    #         le resultat de chaque bout de recherche est stocke avec ses parametres
+    #         La recherche peut contenir des wildcard et un override d exclusion
+    #         ie : searches = {'attr': ['searchedStr', bool exclusionOverride], }
+    #         ie : searches = {'attr': [['searchedStr', 'searchStr2'], exclusionOverride], }
+    #         d autres pattern (autres instances de cette classe) serviront pour calculer le resultat de recherche final
+    #         1 exclusion annule toute la recherche
+    #         l'exclusion exclue que la part juxtaposee, et non tout !
+    #         """
+    #         self.searches = searches
+    #         self.searchedPartsList = None #[(searchedValue, bool(exclusion)), ...]
+    #         self.obj = obj
+    #         self.attr = attr
+    #         self.result = None
+    #         self.flag = flag  # ["unidecode", "ignoreCase", others = no flag]
+    #         # if self.flag == "unidecode":
+    #         #     from unidecode import unidecode
+    #         self.partialMatch = True
+    #         self.lazyWildcard = ' '
+    #         self.exclusionChar = '!'
+    #         self.exclusion = exclusion
+    #         self.splitItems = ','
+    #         self.verbose = verbose
+    #
+    #         if self.status == None:
+    #             self.breakToSearchParts()
+    #             self.searchElementInObjList()
+    #
+    #
+    #
+    #     class ObjSearchPartResult:
+    #         """
+    #         Stocker les parametres et le resultat de la recherche
+    #         Maj du result si omit a la creation possible ou si maj forcee
+    #         1 : resultat positif
+    #         0 : resultat negatif
+    #         -1: resultat exclus
+    #         None: pas de resultat
+    #         """
+    #         def __init__(self, attrNameValue, searchedPart, exclusion, result):
+    #             self.result = result  # [1 0 -1 None]
+    #             self.attrNameValue = attrNameValue
+    #             self.searchedPart = searchedPart
+    #             self.exclusion = exclusion
+    #
+    #         def update(self, force=False):
+    #             if self.result is None or force is True:
+    #                 # result = searchText(self.searchedPart, self.searchedObj.__dict__[self.attr])
+    #                 result = searchText(self.searchedPart, self.attrNameValue)
+    #                 if result is True:
+    #                     if self.exclusion is True:
+    #                         self.result = -1
+    #                     else:
+    #                         self.result = 1
+    #                 else:
+    #                     self.result = 0
+    #
+    #     class ObjSearchResult:
+    #         """
+    #         !!self.searchedPartList doit avoir les exclusions en debut de liste !!
+    #         Stocker le resultat d'un element ou resultat final de la recherche pour un objet
+    #         stocker les differents objsearchpartresult / objsearchresult ac les resultats
+    #         recomplier si besoin les resultat a partir d objet mis a jour
+    #         isElementSearch : if True one exclusion translates as whole object excluded
+    #         if False each result only adds positive results, exclusions are not taken to account
+    #         """
+    #         # TODO
+    #         def __init__(self, searchedObj, searchedPartList, resultList, isElementSearch):
+    #             self.searchedObj = searchedObj
+    #             self.searchedPartList = searchedPartList
+    #             self.resultList = resultList
+    #             self.isElementSearch = isElementSearch
+    #             self.result = None #[1, 0, None]
+    #
+    #         def update(self, force=False):
+    #             """ OK
+    #             Updates results
+    #             """
+    #             for result in self.resultList:
+    #                 result.update(force)
+    #
+    #         def addSearches(self, additionalSearchedPartList, additionalResultList):
+    #             #TODO
+    #             """
+    #             do search, reorder / append to searchPartList
+    #             append results
+    #             y a t il besoin d update les anciennes recherches ? update si compile un element, pas dupdate interelement
+    #             """
+    #             #reorder searchedPartList !!!
+    #             self.update(True)
+    #             return
+    #
+    #         def computeResults(self):
+    #             notProcessed = []
+    #             for resultItem in self.resultList:
+    #                 if self.isElementSearch:
+    #                     if resultItem.result == -1:
+    #                         self.result = 0
+    #                         break
+    #                 if resultItem.result == 0:
+    #                     notProcessed.append(resultItem)
+    #                 if resultItem.result == 1:
+    #                     self.result = 1
+    #                     break
+    #             if self.result not in [-1, 1] and len(notProcessed) != 0:
+    #                 for resultItem in notProcessed:
+    #                     resultItem.update()
+    #                 self.computeResults()
+    #
+    #             if self.result not in [-1, 1]:
+    #                 self.result = 0
+    #
+    #
+    #
+    #
+    #     def breakToSearchParts(self):
+    #         """ OK
+    #         Convertir la ElementSearch en parts et set des exclusions en premier
+    #         ie:
+    #         crepes sucre !oeuf -> [('oeuf', True), ('crepes', False), ('sucre', False)]
+    #         """
+    #         def doSplitToParts():
+    #             """
+    #             returns tupple list  [(searchedPart, exclusion), ...]
+    #             """
+    #             if isinstance(self.searchedString, str):
+    #                 itemParts = self.searchedString.split(self.lazyWildcard)
+    #             else:
+    #                 itemParts = self.searchedString
+    #             idx = 0
+    #             for item in itemParts:
+    #                 item = item.strip()
+    #                 exclusion = False
+    #                 if item.startswith(self.exclusionChar):
+    #                     item = item[1:]
+    #                     exclusion = True
+    #                 itemParts[idx] = (item, exclusion)
+    #                 idx += 1
+    #             return itemParts
+    #
+    #         def reorderSearchParts(searchParts):
+    #             """
+    #             reorder searchParts with exclusion parts first
+    #             """
+    #             reorderedList = []
+    #             for part in list(searchParts):
+    #                 if part[1] is False:
+    #                     reorderedList.append(part)
+    #                     searchParts.remove(part)
+    #             reorderedList.extend(searchParts)
+    #             return reorderedList
+    #
+    #         if isinstance(self.searchedString, str):
+    #             searchParts = doSplitToParts()
+    #         if isinstance(self.searchedString, list):
+    #             if len(self.searchedString[0]) and type(self.searchedString[0]).__name__ == 'str':
+    #                 searchParts = doSplitToParts()
+    #
+    #         searchParts = reorderSearchParts(searchParts)
+    #         self.searchedPartsList = searchParts
+    #
+    #     def searchElementInObjList(self):
+    #         # search text in list of text, a single exclusion match cancels everything
+    #         """
+    #         effectuer une recherche sur l'objet. stocker le resultat
+    #         True : match positif
+    #         0 : pas de match
+    #         False : match exclusion
+    #         None : recherche non effectuee
+    #         sets self.resultList to:
+    #         [ObjSearchPartResult(obj, part, result), ...]
+    #         """
+    #         resultList = []
+    #         resultState = None
+    #         for searchedPart in self.searchedPartsList:
+    #             exclusion = searchedPart[1]
+    #             if resultState == -1 or resultState == 1:
+    #                 resultObj = self.ObjSearchPartResult(searchedPart[0], self.obj, exclusion, None)
+    #                 resultList.append(resultObj)
+    #                 continue
+    #             result = searchText(searchedPart[0], self.obj.__dict__[self.attr])
+    #             if result is True:
+    #                 resultState = 1
+    #                 if exclusion is True: #exclusion de la part
+    #                     resultState = -1
+    #             else:
+    #                 resultState = 0
+    #             resultObj = self.ObjSearchPartResult(searchedPart[0], self.obj, exclusion, resultState)
+    #             resultList.append(resultObj)
+    #
+    #         self.result = self.ObjSearchResult(self.obj, self.searchedPartsList, resultList)
 
     ###############
     # Old Used in recette
     ###############
+
 
     def searchText(self, searchTxt, matchTxt):
         if self.flag in ["unidecode", "ignoreCase"]:

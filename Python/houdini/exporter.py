@@ -1,4 +1,7 @@
 import hou
+import os
+import shutil
+from time import localtime, strftime
 
 # TODO Exporter
 #  add file_name to export
@@ -84,6 +87,20 @@ class Exporter:
     def out_node_connexion_transfer(self):  # TODO add each cxion from OUT_node
         for cxion in self.out_node_cxion:
             pass
+
+
+def onExportScript():
+    hipFile = hou.hipFile.name()
+    hipName = hou.hipFile.basename()
+    node = hou.pwd()
+    exportPath = node.parm('folder_path').eval()+node.parm('version_name').eval()
+    if os.path.exists(exportPath) is False:
+        os.mkdir(exportPath)
+    localDate = strftime("%y%m%d", localtime())
+    localTime = strftime("%H%M%S", localtime())
+    hipName = f'{localDate}.{localTime}.{hipName}'
+    shutil.copy2(hipFile, os.path.join(exportPath, hipName))
+
 
 
 """

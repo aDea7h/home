@@ -1,0 +1,81 @@
+// Vellum
+vellum shape match et pressure
+dependant des numerotation de pts
+faire un sort en locality pour eviter les contraintes traversantes non desirees
+
+
+//attr string edit node:
+// From :
+*:BDD:*Shape
+// To:
+*(1)Shape
+
+
+//Wrangle : autoname
+string name = reverse(s@name);
+int idx = find(name, ':DDB:');
+name = name[:idx];
+s@name = reverse(name);
+idx = find(s@name, '_');
+int namespaceInt = atoi(s@name[idx+1]);
+string namespace;
+if(namespaceInt != 0){
+    int idx2 = find(s@name[idx+1:], '_');
+    int start = idx+1;
+    namespace = '_'+s@name[start:start+idx2];
+}else{
+    namespace = '';
+}
+s@name = s@name[:idx]+namespace;
+
+//Wrangle: Cd random
+float value = @elemnum/float(@numelem);
+@Cd = vector(rand(value));
+
+
+int ival = random_shash(s@name);
+// Limit range to reduce roundoff issues
+ival = (ival & 0xffff) ^ (ival/65536);
+// Clamp in 64 bit modes to ensure the round-off argument
+// is preserved.
+ival &= 0xFFFFffff;
+
+@Cd = hscript_rand(3 * 10 + ival);
+
+//Wrangle : Cd random
+float value = @elemnum/float(@numelem);
+@Cd = vector(rand(value));
+
+
+int ival = random_shash(s@name);
+// Limit range to reduce roundoff issues
+ival = (ival & 0xffff) ^ (ival/65536);
+// Clamp in 64 bit modes to ensure the round-off argument
+// is preserved.
+ival &= 0xFFFFffff;
+
+@ival = abs(float(ival/65536.0));
+
+@Cd = hscript_rand(3 * 10 + ival);
+@Cd = vector(chramp('color', rand(@ival)));
+
+
+//Wrangle : name
+int idx = find(s@path, ':FULL:');
+s@assetName = s@path[1:idx];
+
+string name = reverse(s@path);
+idx = find(name, ':DDB:');
+name = name[:idx];
+s@shapeName = reverse(name);
+idx = find(s@shapeName, '_');
+int namespaceInt = atoi(s@shapeName[idx+1]);
+string namespace;
+if(namespaceInt != 0){
+    int idx2 = find(s@shapeName[idx+1:], '_');
+    int start = idx+1;
+    namespace = '_'+s@shapeName[start:start+idx2];
+}else{
+    namespace = '';
+}
+s@shapeName = s@shapeName[:idx]+namespace;

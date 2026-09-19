@@ -1,4 +1,0 @@
-string opin(float inputnum)
-{
-    return "../" + opinput(".",inputnum);
-} 
